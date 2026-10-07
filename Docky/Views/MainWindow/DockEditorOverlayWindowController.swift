@@ -269,6 +269,8 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
             String(localized: "Search the web, click to open Google in your default browser.")
         case .photoFrame:
             String(localized: "Shows your own photos, cycling through them as a slideshow.")
+        case .claudeActivity:
+            String(localized: "Shows what Claude is working on right now.")
         case .external:
             String(localized: "Community widget loaded from an external bundle.")
         }
@@ -304,6 +306,8 @@ private struct DockEditorGalleryItem: Equatable, Identifiable {
                 "magnifyingglass"
             case .photoFrame:
                 "photo.on.rectangle.angled"
+            case .claudeActivity:
+                "sparkle"
             case .external(let identifier):
                 ExternalWidgetRegistry.shared.metadata(for: identifier)?.systemImageName ?? "puzzlepiece.extension"
             }

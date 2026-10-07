@@ -2171,6 +2171,32 @@ struct TileView: View {
             actions.append(.divider)
             actions.append(widgetRemovalAction(for: widget))
             return actions
+        case .claudeActivity:
+            var actions: [ContextAction] = [
+                .action(String(localized: "Open Claude")) {
+                    ClaudeActivityService.shared.openClaudeDesktop()
+                }
+            ]
+
+            if let spanMenuAction = widgetSpanMenuAction(for: widget) {
+                actions.append(.divider)
+                actions.append(spanMenuAction)
+            }
+
+            actions.append(.divider)
+            if ClaudeActivityService.shared.isClaudeCodeConnected {
+                actions.append(.action(String(localized: "Disconnect Claude Code")) {
+                    ClaudeActivityService.shared.disconnectClaudeCode()
+                })
+            } else {
+                actions.append(.action(String(localized: "Connect Claude Code")) {
+                    ClaudeActivityService.shared.connectClaudeCode()
+                })
+            }
+
+            actions.append(.divider)
+            actions.append(widgetRemovalAction(for: widget))
+            return actions
         case .external:
             var actions: [ContextAction] = []
             if let spanMenuAction = widgetSpanMenuAction(for: widget) {
@@ -2364,6 +2390,8 @@ struct TileView: View {
             } else {
                 PhotoFrameService.shared.choosePhotos()
             }
+        case .claudeActivity:
+            ClaudeActivityService.shared.openClaudeDesktop()
         case .external:
             break
         }

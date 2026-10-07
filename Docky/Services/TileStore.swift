@@ -152,6 +152,8 @@ final class TileStore: ObservableObject {
     }
 
     func syncPreferencesFromSystemDockIfNeeded() {
+        addClaudeActivityWidgetOnceIfNeeded()
+
         guard !hasImportedSystemDockPreferences else {
             return
         }
@@ -202,6 +204,34 @@ final class TileStore: ObservableObject {
         }
         refreshTrailingTilesFromPreferences()
         rebuildTiles()
+    }
+
+    /// Personal fork: the Claude widget was added after this dock's layout
+    /// already existed, so the starter-widget seeding above never ran for
+    /// it. Insert it once, after the last widget, and never again: if the
+    /// user removes it, it stays removed.
+    private func addClaudeActivityWidgetOnceIfNeeded() {
+        let key = "docky.fork.didAddClaudeActivityWidget"
+        guard !defaults.bool(forKey: key) else {
+            return
+        }
+        defaults.set(true, forKey: key)
+
+        let pinnedItems = preferences.pinnedItems
+        guard !pinnedItems.isEmpty,
+              !pinnedItems.contains(where: { $0.kind == .widget && $0.widgetKind == .claudeActivity }) else {
+            return
+        }
+
+        let insertionIndex = pinnedItems.lastIndex(where: { $0.kind == .widget }).map { $0 + 1 } ?? pinnedItems.count
+        insertPinnedItem(
+            .widget(
+                kind: .claudeActivity,
+                ownerBundleIdentifier: WidgetOwnerBundleIdentifiers.claudeActivity,
+                span: .three
+            ),
+            at: insertionIndex
+        )
     }
 
     private var hasImportedSystemDockPreferences: Bool {
@@ -1777,7 +1807,8 @@ final class TileStore: ObservableObject {
         [
             .widget(kind: .calendar, ownerBundleIdentifier: WidgetOwnerBundleIdentifiers.calendar, span: .three),
             .widget(kind: .nowPlaying, ownerBundleIdentifier: WidgetOwnerBundleIdentifiers.genericNowPlaying, span: .three),
-            .widget(kind: .systemStatus, ownerBundleIdentifier: WidgetOwnerBundleIdentifiers.systemStatus, span: .two),
+            .widget(kind: .systemStatus, ownerBundleIdentifier: WidgetOwnerBundleIdentifiers.systemStatus, span: .three),
+            .widget(kind: .claudeActivity, ownerBundleIdentifier: WidgetOwnerBundleIdentifiers.claudeActivity, span: .three),
         ]
     }
 
@@ -2458,7 +2489,8 @@ final class TileStore: ObservableObject {
         switch display.kind {
         case .nowPlaying:
             mediaPlayback.state(for: display.bundleIdentifier)?.hasContent == true
-        case .calendar, .calendarDate, .reminders, .batteries, .systemStatus, .weather, .search, .photoFrame:
+        case .calendar, .calendarDate, .reminders, .batteries, .systemStatus, .weather, .search, .photoFrame,
+             .claudeActivity:
             true
         case .external:
             true

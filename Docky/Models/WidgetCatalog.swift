@@ -14,6 +14,7 @@ enum WidgetOwnerBundleIdentifiers {
     static let genericNowPlaying = "gt.quintero.Docky.now-playing"
     static let search = "gt.quintero.Docky.search"
     static let photoFrame = "gt.quintero.Docky.photo-frame"
+    static let claudeActivity = "gt.quintero.Docky.claude-activity"
 }
 
 struct WidgetRegistration: Equatable, Identifiable {
@@ -114,6 +115,15 @@ enum WidgetCatalog {
         includesInSmartStack: false
     )
 
+    static let claudeActivity = WidgetRegistration(
+        kind: .claudeActivity,
+        ownerBundleIdentifier: WidgetOwnerBundleIdentifiers.claudeActivity,
+        defaultSpan: .three,
+        includesInPalette: true,
+        // Kept out of Smart Stacks so existing stacks do not grow a tile.
+        includesInSmartStack: false
+    )
+
     static let builtInRegistrations: [WidgetRegistration] = [
         calendar,
         calendarDate,
@@ -124,6 +134,7 @@ enum WidgetCatalog {
         genericNowPlaying,
         search,
         photoFrame,
+        claudeActivity,
     ]
 
     /// All available widget registrations, built-ins plus any external

@@ -110,6 +110,9 @@ enum WidgetKind: Codable, Identifiable, Hashable {
     case weather
     case search
     case photoFrame
+    /// What Claude is working on: local Claude Code sessions and the task
+    /// open in the Claude desktop app. See `ClaudeActivityService`.
+    case claudeActivity
     /// Widget supplied by a community bundle loaded at startup. The
     /// associated value is the plugin's stable identifier (e.g.
     /// "com.example.MyWidget"); the live registration is owned by
@@ -126,6 +129,7 @@ enum WidgetKind: Codable, Identifiable, Hashable {
         .weather,
         .search,
         .photoFrame,
+        .claudeActivity,
     ]
 
     /// Round-trips through DockyPreferences / persistence as a single
@@ -143,6 +147,7 @@ enum WidgetKind: Codable, Identifiable, Hashable {
         case .weather: "weather"
         case .search: "search"
         case .photoFrame: "photoFrame"
+        case .claudeActivity: "claudeActivity"
         case .external(let identifier): "external:\(identifier)"
         }
     }
@@ -164,6 +169,7 @@ enum WidgetKind: Codable, Identifiable, Hashable {
         case "weather": self = .weather
         case "search": self = .search
         case "photoFrame": self = .photoFrame
+        case "claudeActivity": self = .claudeActivity
         default: return nil
         }
     }
@@ -207,6 +213,8 @@ enum WidgetKind: Codable, Identifiable, Hashable {
             String(localized: "Search")
         case .photoFrame:
             String(localized: "Photo Frame")
+        case .claudeActivity:
+            String(localized: "Claude")
         case .external(let identifier):
             ExternalWidgetRegistry.shared.metadata(for: identifier)?.displayName ?? identifier
         }
@@ -216,7 +224,8 @@ enum WidgetKind: Codable, Identifiable, Hashable {
         switch self {
         case .calendarDate:
             [.one]
-        case .calendar, .reminders, .batteries, .systemStatus, .nowPlaying, .weather, .search, .photoFrame:
+        case .calendar, .reminders, .batteries, .systemStatus, .nowPlaying, .weather, .search, .photoFrame,
+             .claudeActivity:
             TileSpan.allCases
         case .external(let identifier):
             ExternalWidgetRegistry.shared.metadata(for: identifier)?.supportedSpans ?? TileSpan.allCases
@@ -231,6 +240,9 @@ enum WidgetKind: Codable, Identifiable, Hashable {
             // Taller and wider than standard: the agenda shares the panel
             // with the invitations list and its reply buttons.
             WidgetExpansionExtent(widthTiles: 4, heightTiles: 4)
+        case .claudeActivity:
+            // Wide enough for a prompt and a step per session.
+            WidgetExpansionExtent(widthTiles: 4, heightTiles: 3)
         case .calendarDate, .reminders, .batteries, .systemStatus, .weather, .search, .photoFrame:
             .standard
         case .external(let identifier):
@@ -245,7 +257,7 @@ enum WidgetKind: Codable, Identifiable, Hashable {
     /// stay inline.
     nonisolated var isExpandable: Bool {
         switch self {
-        case .calendar, .reminders, .batteries, .systemStatus, .nowPlaying, .weather, .photoFrame:
+        case .calendar, .reminders, .batteries, .systemStatus, .nowPlaying, .weather, .photoFrame, .claudeActivity:
             true
         case .calendarDate, .search:
             false
