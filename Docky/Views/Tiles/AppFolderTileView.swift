@@ -373,6 +373,11 @@ struct AppFolderPopoverView: View {
     @State private var isReorderMode = false
     @State private var dragState: AppFolderReorderDragState?
     @State private var cellFrames: [String: CGRect] = [:]
+    /// Flips to `true` just after the popover opens so the icons spring in
+    /// one after another. Only ever left `false` for a single runloop turn
+    /// (see `playEntrance`), so a missed trigger costs the animation, never
+    /// the icons.
+    @State private var entranceVisible = false
     @FocusState private var isTitleFieldFocused: Bool
 
     fileprivate static let columns = 3
@@ -445,6 +450,7 @@ struct AppFolderPopoverView: View {
         .frame(width: popoverSize.width, height: popoverSize.height)
         .onAppear {
             onPopoverSizeChange(popoverSize)
+            playEntrance()
         }
         .onChange(of: tile.apps.count) { _ in
             onPopoverSizeChange(popoverSize)
@@ -455,6 +461,22 @@ struct AppFolderPopoverView: View {
             if !presented, isReorderMode {
                 isReorderMode = false
             }
+            if presented {
+                playEntrance()
+            }
+        }
+    }
+
+    /// Restarts the staggered icon arrival: snap to the hidden state
+    /// without animating, then reveal on the next runloop turn.
+    private func playEntrance() {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            entranceVisible = false
+        }
+        DispatchQueue.main.async {
+            entranceVisible = true
         }
     }
 
@@ -485,6 +507,13 @@ struct AppFolderPopoverView: View {
         } label: {
             iconImage(for: app)
                 .opacity(isBeingDragged ? 0 : (isReorderMode ? 0.85 : 1))
+                // Applied inside the label so the scale never reaches the
+                // cell frames the reorder drag measures just below.
+                .modifier(AppFolderItemEntranceModifier(
+                    index: tile.apps.firstIndex(where: { $0.bundleIdentifier == app.bundleIdentifier }) ?? 0,
+                    isVisible: entranceVisible,
+                    allowsHoverLift: !isReorderMode
+                ))
         }
         .buttonStyle(.plain)
         .background {
@@ -740,7 +769,8 @@ struct AppFolderPopoverView: View {
             .contextActions(for: syntheticTile, modifierFlags: modifierFlags) ?? []
         let windows = WorkspaceService.shared.appWindows(bundleIdentifier: app.bundleIdentifier)
         let withWindows = injectingAppWindowActions(windows, into: baseActions)
-        return appendingRemoveFromFolder(to: withWindows, for: app)
+        let withCustomIcon = injectingCustomIconActions(into: withWindows, for: app)
+        return appendingRemoveFromFolder(to: withCustomIcon, for: app)
     }
 
     private func appendingRemoveFromFolder(
@@ -1305,5 +1335,39 @@ private struct AppFolderReorderGestureModifier: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// Arrival and hover motion for one icon in an open app folder: icons
+/// spring up from a smaller size one after another, then lift slightly
+/// under the pointer. With Reduce Motion on, icons simply fade in.
+private struct AppFolderItemEntranceModifier: ViewModifier {
+    let index: Int
+    let isVisible: Bool
+    let allowsHoverLift: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+
+    /// Later icons wait a little longer; capped so a full folder still
+    /// finishes arriving in about a quarter of a second.
+    private var arrivalDelay: Double {
+        guard isVisible, !reduceMotion else { return 0 }
+        return Double(min(index, 11)) * 0.02
+    }
+
+    private var scale: CGFloat {
+        if reduceMotion { return 1 }
+        guard isVisible else { return 0.55 }
+        return isHovered && allowsHoverLift ? 1.08 : 1
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(scale)
+            .opacity(isVisible ? 1 : 0)
+            .animation(.spring(response: 0.34, dampingFraction: 0.68).delay(arrivalDelay), value: isVisible)
+            .animation(.spring(response: 0.22, dampingFraction: 0.62), value: isHovered)
+            .onHover { isHovered = $0 }
     }
 }

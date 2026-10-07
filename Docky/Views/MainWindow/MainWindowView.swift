@@ -480,6 +480,14 @@ final class ClickThroughHostingView: NSHostingView<MainWindowView> {
                 guard case .app(let app) = targetTile.content, !app.bundleIdentifier.isEmpty else {
                     return false
                 }
+                // Option-drop of a single image restyles the app instead
+                // of opening the image with it. Falls through to the
+                // normal open-with when the file is not a usable image.
+                if NSEvent.modifierFlags.contains(.option),
+                   let iconURL = AppIconCustomizationService.iconCandidate(in: urls),
+                   AppIconCustomizationService.shared.setIcon(from: iconURL, forBundleIdentifier: app.bundleIdentifier) {
+                    return true
+                }
                 WorkspaceService.shared.open(fileURLs: urls, withApplicationBundleIdentifier: app.bundleIdentifier)
                 return true
             }

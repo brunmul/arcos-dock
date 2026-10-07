@@ -1683,7 +1683,8 @@ struct TileView: View {
         }
         let withWindows = injectingAppWindowActions(windows, into: actions)
         let withFinder = injectingFinderHomeNavigation(into: withWindows, for: app)
-        return injectingRemoveFromFolder(into: withFinder, for: app)
+        let withCustomIcon = injectingCustomIconActions(into: withFinder, for: app)
+        return injectingRemoveFromFolder(into: withCustomIcon, for: app)
     }
 
     /// Tile id format for inline / grouped-opened children of an app folder:
