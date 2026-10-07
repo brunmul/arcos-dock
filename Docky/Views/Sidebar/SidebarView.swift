@@ -256,6 +256,14 @@ struct SidebarCornersView: View {
             corner(isTop: false)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay {
+            // The outline that sets the sidebar apart from a window of the
+            // same grey next to it. It runs down the sidebar's edge and
+            // around both corners, on the window's side of them.
+            SidebarEdgeOutline()
+                .stroke(Color.primary.opacity(0.18), lineWidth: 1)
+                .padding(.leading, 0.5)
+        }
         .allowsHitTesting(false)
     }
 
@@ -263,6 +271,31 @@ struct SidebarCornersView: View {
         SidebarChrome()
             .frame(width: SidebarPreferences.cornerRadius, height: SidebarPreferences.cornerRadius)
             .clipShape(SidebarConcaveCorner(isTop: isTop))
+    }
+}
+
+/// The sidebar's visible edge: down its right side, curving outwards along
+/// the concave corner at each end. Drawn in the strip that holds the
+/// corners, whose width is the corners' radius.
+private struct SidebarEdgeOutline: Shape {
+    func path(in rect: CGRect) -> Path {
+        let radius = rect.width
+        var path = Path()
+        path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addRelativeArc(
+            center: CGPoint(x: rect.maxX, y: rect.minY + radius),
+            radius: radius,
+            startAngle: .degrees(-90),
+            delta: .degrees(-90)
+        )
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - radius))
+        path.addRelativeArc(
+            center: CGPoint(x: rect.maxX, y: rect.maxY - radius),
+            radius: radius,
+            startAngle: .degrees(180),
+            delta: .degrees(-90)
+        )
+        return path
     }
 }
 

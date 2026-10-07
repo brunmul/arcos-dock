@@ -62,6 +62,9 @@ private struct SidebarWidgetShell<Trailing: View>: View {
     var pulses = false
     let title: String
     var isDimmed = false
+    /// For a short title that must never be cut ("SSD 89%"): what is on
+    /// the right gives way instead.
+    var keepsTitleWhole = false
     var action: (() -> Void)?
     @ViewBuilder var trailing: () -> Trailing
 
@@ -100,17 +103,20 @@ private struct SidebarWidgetShell<Trailing: View>: View {
                     cornerRadius: SidebarMetrics.tileCornerRadius
                 ))
         } else {
-            HStack(spacing: SidebarMetrics.rowSpacing) {
+            HStack(spacing: 0) {
                 icon(size: 12)
                     .frame(width: SidebarMetrics.rowIconSize)
+                    .padding(.trailing, SidebarMetrics.rowSpacing)
 
                 Text(title)
                     .font(.system(size: SidebarMetrics.rowFontSize))
                     .foregroundStyle(isDimmed ? .secondary : .primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .fixedSize(horizontal: keepsTitleWhole, vertical: false)
+                    .layoutPriority(keepsTitleWhole ? 1 : 0)
 
-                Spacer(minLength: 4)
+                Spacer(minLength: 6)
 
                 trailing()
             }
@@ -370,10 +376,16 @@ private struct SidebarSystemStatusWidget: View {
                     systemName: "internaldrive",
                     iconColor: diskColor(for: snapshot.diskUsagePercent),
                     title: "SSD \(Int(snapshot.diskUsagePercent.rounded()))%",
+                    keepsTitleWhole: true,
                     trailing: {
-                        SidebarWidgetFigure(
-                            text: "↓\(snapshot.compactReceivedRateText) ↑\(snapshot.compactSentRateText)"
-                        )
+                        // Both rates where they fit, the download alone
+                        // when they are both long.
+                        ViewThatFits(in: .horizontal) {
+                            SidebarWidgetFigure(
+                                text: "↓\(snapshot.compactReceivedRateText) ↑\(snapshot.compactSentRateText)"
+                            )
+                            SidebarWidgetFigure(text: "↓\(snapshot.compactReceivedRateText)")
+                        }
                     }
                 )
             } else {

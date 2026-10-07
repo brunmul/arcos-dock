@@ -422,6 +422,9 @@ final class PermissionsService: ObservableObject {
                 let granted = AXIsProcessTrusted()
                 if granted != (self.accessibility == .granted) {
                     self.refreshAccessibility()
+                    #if DEBUG
+                    DevelopmentDiagnostics.writeState(reason: "accessibility changed")
+                    #endif
                 }
             }
         }

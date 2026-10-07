@@ -59,6 +59,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
         PermissionsService.shared.refresh()
         PermissionsService.shared.startMonitoringAccessibility()
+        #if DEBUG
+        DevelopmentDiagnostics.writeState(reason: "launch")
+        #endif
 
         if PermissionsService.shared.setupComplete {
             PermissionsService.shared.markInitialOnboardingCompleted()

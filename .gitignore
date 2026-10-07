@@ -10,3 +10,6 @@ DerivedData/
 # Python
 __pycache__/
 *.pyc
+
+# Written by debug builds (DevelopmentDiagnostics)
+.docky-dev-state.txt
