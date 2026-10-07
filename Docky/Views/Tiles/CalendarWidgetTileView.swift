@@ -88,6 +88,7 @@ struct CalendarWidgetTileView: View {
                             )
                     }
                 }
+                .dockyWidgetGlass(cornerRadius: cornerRadius, isEnabled: !showsDateVariant)
                 .animation(.easeInOut(duration: 0.22), value: isExpanded)
                 .animation(.easeOut(duration: 0.12), value: isExpandedPreviewOpen)
             }
@@ -159,7 +160,7 @@ struct CalendarWidgetTileView: View {
         VStack(spacing: layout.rowSpacing * 2) {
             Text(shortTimeText(for: event, now: now))
                 .font(.system(size: layout.rowTitleFontSize, weight: .bold, design: .rounded))
-                .foregroundStyle(Color.primary.opacity(0.98))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
 
@@ -183,7 +184,7 @@ struct CalendarWidgetTileView: View {
                 HStack(spacing: layout.rowGap) {
                     Text(event.title)
                         .font(.system(size: layout.rowTitleFontSize, weight: .semibold))
-                        .foregroundStyle(Color.primary.opacity(0.98))
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                         .truncationMode(.tail)
 
@@ -196,7 +197,7 @@ struct CalendarWidgetTileView: View {
                 HStack(spacing: layout.rowGap) {
                     Text(scheduleLine(for: event, now: now))
                         .font(.system(size: layout.rowTimeFontSize, weight: .medium, design: .rounded))
-                        .foregroundStyle(Color.primary.opacity(0.66))
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
 
                     Spacer(minLength: 0)
@@ -245,14 +246,14 @@ struct CalendarWidgetTileView: View {
                 Text(timeText)
                     .font(.system(size: layout.rowTimeFontSize, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(Color.primary.opacity(0.62))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .fixedSize()
             }
 
             Text(event.title)
                 .font(.system(size: layout.rowTitleFontSize, weight: .semibold))
-                .foregroundStyle(Color.primary.opacity(0.98))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
@@ -370,7 +371,7 @@ struct CalendarWidgetTileView: View {
                     VStack(alignment: .leading, spacing: layout.eventRowSpacing) {
                         Text(section.title)
                             .font(.system(size: layout.sectionTitleFontSize, weight: .semibold))
-                            .foregroundStyle(Color.primary.opacity(0.55))
+                            .foregroundStyle(.secondary)
                             .tracking(0.5)
                             .textCase(.uppercase)
 
@@ -446,17 +447,17 @@ struct CalendarWidgetTileView: View {
             VStack(spacing: layout.stackSpacing) {
                 Image(systemName: calendar.lastErrorDescription == nil ? "calendar.badge.clock" : "calendar.badge.exclamationmark")
                     .font(.system(size: layout.emptyIconSize, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.84))
+                    .foregroundStyle(.secondary)
 
                 Text(emptyTitle)
                     .font(.system(size: layout.eventTitleFontSize, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.94))
+                    .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
 
                 if let detail = emptyDetail {
                     Text(detail)
                         .font(.system(size: layout.eventDetailFontSize))
-                        .foregroundStyle(Color.primary.opacity(0.62))
+                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .lineLimit(3)
                 }
@@ -516,13 +517,13 @@ struct CalendarWidgetTileView: View {
             } else {
                 Image(systemName: calendar.lastErrorDescription == nil ? "calendar.badge.clock" : "calendar.badge.exclamationmark")
                     .font(.system(size: layout.rowTitleFontSize * 1.3, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.9))
+                    .foregroundStyle(.primary)
             }
 
             if renderedSpan != .one {
                 Text(emptyTitle)
                     .font(.system(size: layout.rowTitleFontSize, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.96))
+                    .foregroundStyle(.primary)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
             }
@@ -536,22 +537,17 @@ struct CalendarWidgetTileView: View {
         NSColor.windowBackgroundColor
     }
 
-    /// Glass like the dock around it, so the widget reads as part of the
-    /// dock rather than a white card on top of it. The hover panel floats
-    /// over arbitrary windows, so it keeps a light tint under its text.
-    /// The date variant stays opaque: it stands in for the Calendar icon.
+    /// The widget sits on glass like the dock around it (see
+    /// `dockyWidgetGlass` on the tile), so this layer is clear. Only the
+    /// date variant keeps an opaque fill: it stands in for the Calendar
+    /// icon.
     @ViewBuilder
     private var tileBackground: some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-
         if showsDateVariant {
             Color(nsColor: backgroundTintColor)
-                .dockyGlassBorder(in: shape)
+                .dockyGlassBorder(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         } else {
-            Color(nsColor: backgroundTintColor)
-                .opacity(isExpanded ? 0.45 : 0)
-                .dockyGlass(.regular, in: shape)
-                .dockyGlassBorder(in: shape)
+            Color.clear
         }
     }
 
@@ -842,13 +838,13 @@ private struct ExpandedEventRow: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(event.title)
                         .font(.system(size: layout.eventTitleFontSize, weight: .semibold))
-                        .foregroundStyle(Color.primary.opacity(0.96))
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                         .truncationMode(.tail)
 
                     Text(scheduleText)
                         .font(.system(size: layout.eventDetailFontSize, weight: .medium))
-                        .foregroundStyle(Color.primary.opacity(0.66))
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
@@ -985,13 +981,13 @@ private struct ExpandedInvitationRow: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(event.title)
                             .font(.system(size: layout.eventTitleFontSize, weight: .semibold))
-                            .foregroundStyle(Color.primary.opacity(0.96))
+                            .foregroundStyle(.primary)
                             .lineLimit(1)
                             .truncationMode(.tail)
 
                         Text(whenText)
                             .font(.system(size: layout.eventDetailFontSize, weight: .medium))
-                            .foregroundStyle(Color.primary.opacity(0.66))
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
 

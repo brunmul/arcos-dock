@@ -26,13 +26,8 @@ struct SystemStatusWidgetTileView: View {
             let layout = layout(in: proxy.size, visibleMetricCount: max(1, metrics.count))
 
             ZStack {
-                // Glass like the dock around it; the hover panel keeps a
-                // light tint under its text because it floats over
-                // arbitrary windows.
-                Color(nsColor: backgroundTintColor)
-                    .opacity(isExpanded ? 0.45 : 0)
-                    .dockyGlass(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                    .dockyGlassBorder(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                // Clear: the tile sits on glass, applied below.
+                Color.clear
 
                 if !isWithinStack {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -41,6 +36,7 @@ struct SystemStatusWidgetTileView: View {
 
                 content(metrics: metrics, layout: layout, size: proxy.size)
             }
+            .dockyWidgetGlass(cornerRadius: cornerRadius)
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .task {
@@ -123,7 +119,7 @@ struct SystemStatusWidgetTileView: View {
             Text(text)
                 .font(.system(size: layout.compactRateFontSize, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(Color.primary.opacity(0.98))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
@@ -142,7 +138,7 @@ struct SystemStatusWidgetTileView: View {
             HStack(spacing: base * 0.5) {
                 Text("Network")
                     .font(.system(size: base, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.9))
+                    .foregroundStyle(.primary)
 
                 Spacer(minLength: 0)
 
@@ -159,24 +155,24 @@ struct SystemStatusWidgetTileView: View {
             HStack(spacing: base * 0.45) {
                 Image(systemName: metric.kind.symbolName)
                     .font(.system(size: base * 0.95, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.7))
+                    .foregroundStyle(.secondary)
 
                 Text(expandedTitle(for: metric.kind))
                     .font(.system(size: base, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.9))
+                    .foregroundStyle(.primary)
 
                 Spacer(minLength: 0)
 
                 Text(metric.primaryText)
                     .font(.system(size: base * 1.15, weight: .bold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(Color.primary.opacity(0.98))
+                    .foregroundStyle(.primary)
             }
 
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule(style: .continuous)
-                        .fill(Color.primary.opacity(0.14))
+                        .fill(.quaternary)
 
                     Capsule(style: .continuous)
                         .fill(Color(nsColor: accentColor(for: metric)))
@@ -188,7 +184,7 @@ struct SystemStatusWidgetTileView: View {
             if let detail {
                 Text(detail)
                     .font(.system(size: base * 0.82, weight: .medium))
-                    .foregroundStyle(Color.primary.opacity(0.62))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -204,7 +200,7 @@ struct SystemStatusWidgetTileView: View {
             Text(text)
                 .font(.system(size: base * 0.95, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(Color.primary.opacity(0.98))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
         }
     }
@@ -241,20 +237,20 @@ struct SystemStatusWidgetTileView: View {
         VStack(alignment: .leading, spacing: 1) {
             Text(metric.secondaryText)
                 .font(.system(size: layout.compactLabelFontSize, weight: .semibold))
-                .foregroundStyle(Color.primary.opacity(0.6))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
 
             Text(metric.primaryText)
                 .font(.system(size: layout.compactValueFontSize, weight: .bold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(Color.primary.opacity(0.98))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule(style: .continuous)
-                        .fill(Color.primary.opacity(0.14))
+                        .fill(.quaternary)
 
                     Capsule(style: .continuous)
                         .fill(Color(nsColor: accentColor(for: metric)))
@@ -272,7 +268,7 @@ struct SystemStatusWidgetTileView: View {
         VStack(spacing: layout.stackSpacing) {
             ZStack {
                 Circle()
-                    .stroke(Color.primary.opacity(0.14), lineWidth: layout.ringWidth)
+                    .stroke(.quaternary, lineWidth: layout.ringWidth)
 
                 Circle()
                     .trim(from: 0, to: metric.progress)
@@ -288,14 +284,14 @@ struct SystemStatusWidgetTileView: View {
 
                 Image(systemName: metric.kind.symbolName)
                     .font(.system(size: layout.iconSize, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.9))
+                    .foregroundStyle(.primary)
             }
             .frame(width: layout.circleDiameter, height: layout.circleDiameter)
 
             VStack(spacing: 0) { 
                 Text(metric.primaryText)
                     .font(.system(size: layout.valueFontSize, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.primary.opacity(0.98))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
             }
         }
@@ -312,19 +308,19 @@ struct SystemStatusWidgetTileView: View {
             } else {
                 Image(systemName: "gauge.with.needle")
                     .font(.system(size: layout.iconSize, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.9))
+                    .foregroundStyle(.primary)
             }
 
             Text(systemStatus.isLoading ? "Loading Status" : "No Status Data")
                 .font(.system(size: layout.titleFontSize, weight: .semibold))
-                .foregroundStyle(Color.primary.opacity(0.96))
+                .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
 
             if !systemStatus.isLoading, renderedSpan != .one {
                 Text("System metrics are temporarily unavailable.")
                     .font(.system(size: layout.detailFontSize))
-                    .foregroundStyle(Color.primary.opacity(0.68))
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
             }

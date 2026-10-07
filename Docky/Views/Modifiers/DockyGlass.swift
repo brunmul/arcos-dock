@@ -33,6 +33,29 @@ extension View {
         modifier(DockyGlassModifier(style: style, shape: AnyShape(Capsule())))
     }
 
+    /// Frosted glass for a widget tile: Liquid Glass with a translucent
+    /// wash of the window background color under the content.
+    ///
+    /// Plain glass is not enough for text. It takes its brightness from
+    /// whatever is behind the dock, so under a light system theme and a
+    /// dark wallpaper the tile turns grey-dark while labels stay black
+    /// (checked on macOS 27: neither `.primary` nor content placed inside
+    /// the glass flips with it). The wash pins the tile to the theme's own
+    /// light or dark tone, so label colors always have the contrast they
+    /// were designed for, and the tile still lets the dock show through.
+    @ViewBuilder
+    func dockyWidgetGlass(cornerRadius: CGFloat, isEnabled: Bool = true) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if isEnabled {
+            self
+                .background(Color(nsColor: .windowBackgroundColor).opacity(dockyWidgetFrostOpacity))
+                .dockyGlass(.regular, in: shape)
+                .dockyGlassBorder(in: shape)
+        } else {
+            self
+        }
+    }
+
     /// Adds the dock chrome's gradient stroke "glass" outline on top of
     /// `self`, gated by the `disablesGlassLook` preference. When the user
     /// turns glass off the modifier becomes a no-op so the surface falls
@@ -42,6 +65,10 @@ extension View {
         modifier(DockyGlassBorderModifier(shape: shape, lineWidth: lineWidth))
     }
 }
+
+/// How much of the theme's background color is laid over a widget's glass.
+/// Lower is more see-through and less legible over a contrasting wallpaper.
+let dockyWidgetFrostOpacity: Double = 0.55
 
 /// Shared with `MainWindowView.chromeBackground` so tile glass borders
 /// stay in lockstep with the dock chrome's gradient stroke.

@@ -32,9 +32,7 @@ struct NowPlayingWidgetTileView: View {
                 // wash of the artwork color keeps the tile tied to the
                 // track without turning it back into a solid block.
                 Color(nsColor: prominentTintColor)
-                    .opacity(playbackState?.isPresentable == true ? (isExpanded ? 0.4 : 0.22) : 0)
-                    .dockyGlass(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                    .dockyGlassBorder(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                    .opacity(playbackState?.isPresentable == true ? 0.22 : 0)
 
                 if !isWithinStack {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -59,6 +57,7 @@ struct NowPlayingWidgetTileView: View {
                         .transition(.opacity)
                 }
             }
+            .dockyWidgetGlass(cornerRadius: cornerRadius)
             .animation(.easeInOut(duration: 0.18), value: isLyricsOverlayPresented)
             .animation(.easeInOut(duration: 0.22), value: isExpanded)
             .animation(.easeOut(duration: 0.12), value: isExpandedPreviewOpen)
