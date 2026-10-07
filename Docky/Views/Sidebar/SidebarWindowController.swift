@@ -87,6 +87,7 @@ final class SidebarWindowController: NSObject {
     func hide() {
         pointerTimer?.invalidate()
         pointerTimer = nil
+        SidebarWidgetHoverController.shared.hide()
         panel?.orderOut(nil)
     }
 
@@ -108,6 +109,13 @@ final class SidebarWindowController: NSObject {
             height: visible.height
         )
         return (screen, frame)
+    }
+
+    /// Right edge of the sidebar on screen, for the widget detail that
+    /// opens beside it.
+    var panelMaxX: CGFloat? {
+        guard let panel, panel.isVisible else { return nil }
+        return panel.frame.maxX
     }
 
     /// The display the sidebar lives on, whether or not it is showing.
@@ -274,7 +282,12 @@ final class SidebarWindowController: NSObject {
         if isRevealed {
             let keepZone = panel.frame.insetBy(dx: -28, dy: -28)
             let isInteracting = NSEvent.pressedMouseButtons != 0
-            if keepZone.contains(pointer) || isInteracting {
+            // A widget's detail opens beside the sidebar; the pointer being
+            // on it counts as still using the sidebar.
+            let isOnDetail = SidebarWidgetHoverController.shared.visibleFrame?
+                .insetBy(dx: -12, dy: -12)
+                .contains(pointer) ?? false
+            if keepZone.contains(pointer) || isInteracting || isOnDetail {
                 awayStart = nil
             } else if let start = awayStart {
                 if now.timeIntervalSince(start) >= hideDelay {
@@ -311,6 +324,9 @@ final class SidebarWindowController: NSObject {
         guard let panel, isRevealed != revealed || panel.alphaValue != (revealed ? 1 : 0) else { return }
         isRevealed = revealed
         panel.ignoresMouseEvents = !revealed
+        if !revealed {
+            SidebarWidgetHoverController.shared.hide()
+        }
 
         NSAnimationContext.runAnimationGroup { context in
             context.duration = animationDuration

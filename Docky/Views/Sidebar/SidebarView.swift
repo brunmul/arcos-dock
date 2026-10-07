@@ -12,8 +12,9 @@
 //                contents underneath
 //    open        every open app; a row unfolds into the app's windows.
 //                "New Window" closes the list and opens the app search
-//    widgets     the dock's widgets as compact cards; one at a time
-//                unfolds in place into its detailed view
+//    widgets     the dock's widgets as rows the size of an app's row;
+//                their detail opens beside the sidebar on hover
+//                (`SidebarWidgets.swift`)
 //
 //  Compact, the same content becomes a rail of icons, like the collapsed
 //  vertical tabs of Chrome or Brave.
@@ -80,9 +81,9 @@ struct SidebarView: View {
                     .padding(.horizontal, Self.horizontalPadding)
                     .padding(.bottom, 6)
 
-                VStack(spacing: 4) {
+                VStack(spacing: 2) {
                     ForEach(widgets, id: \.identifier) { widget in
-                        SidebarWidgetCard(widget: widget)
+                        SidebarWidgetItem(widget: widget)
                     }
                 }
                 .padding(.horizontal, Self.horizontalPadding)
@@ -357,89 +358,11 @@ private struct SidebarDivider: View {
     }
 }
 
-// MARK: - Widgets
-
-/// One widget as a compact card. A click unfolds it in place into the
-/// detailed view the dock strip shows on hover; the bar under the detail
-/// folds it back. Only one is unfolded at a time.
-private struct SidebarWidgetCard: View {
-    let widget: WidgetTile
-
-    @ObservedObject private var sidebar = SidebarPreferences.shared
-    @State private var isHandleHovered = false
-
-    private static let cornerRadius: CGFloat = 10
-    private static let collapsedHeight: CGFloat = 40
-
-    private var isExpanded: Bool {
-        widget.kind.isExpandable && sidebar.expandedWidgetIdentifiers.contains(widget.identifier)
-    }
-
-    var body: some View {
-        VStack(spacing: 2) {
-            WidgetTileView(
-                tile: widget,
-                cornerRadius: Self.cornerRadius,
-                renderedSpan: .three,
-                isWithinStack: false,
-                isExpanded: isExpanded,
-                isExpandedPreviewOpen: isExpanded
-            )
-            .frame(height: isExpanded ? expandedHeight : Self.collapsedHeight)
-            .onTapGesture {
-                // Folded, the whole card is the target. Unfolded, only the
-                // bar below folds it back, so a click inside the detail
-                // view never closes it by accident.
-                guard widget.kind.isExpandable, !isExpanded else { return }
-                toggle()
-            }
-            .help(widget.kind.isExpandable && !isExpanded ? "Click for details" : "")
-
-            if isExpanded {
-                Button(action: toggle) {
-                    Image(systemName: "chevron.compact.up")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(Color.primary.opacity(isHandleHovered ? 0.08 : 0))
-                        )
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .onHover { isHandleHovered = $0 }
-                .help("Show less")
-            }
-        }
-    }
-
-    private func toggle() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
-            sidebar.toggleWidget(widget.identifier)
-        }
-    }
-
-    private var expandedHeight: CGFloat {
-        switch widget.kind {
-        case .calendar:
-            250
-        case .nowPlaying:
-            136
-        case .systemStatus:
-            184
-        default:
-            200
-        }
-    }
-}
-
 // MARK: - Compact rail
 
 /// The sidebar reduced to a column of icons. Pinned apps, pinned folders,
-/// the other open apps, "+", and the widgets as small squares. Clicking a
-/// folder or a widget opens the full sidebar on it.
+/// the other open apps, "+", and the widgets as icon tiles. Clicking a
+/// folder opens the full sidebar on it.
 private struct SidebarRail: View {
     let pinnedApps: [AppTile]
     let pinnedFolders: [SidebarPinnedFolder]
@@ -504,9 +427,10 @@ private struct SidebarRail: View {
 
                 VStack(spacing: 4) {
                     ForEach(widgets, id: \.identifier) { widget in
-                        SidebarRailWidget(widget: widget)
+                        SidebarWidgetItem(widget: widget, isRail: true)
                     }
                 }
+                .frame(width: Self.itemWidth)
             }
         }
         .frame(maxWidth: .infinity)
@@ -522,30 +446,5 @@ private struct SidebarRail: View {
             .fill(Color.primary.opacity(0.1))
             .frame(width: 24, height: 1)
             .padding(.vertical, 3)
-    }
-}
-
-/// A widget at the size of a single dock tile. Its own controls keep
-/// working; a click anywhere else opens the full sidebar on its details.
-private struct SidebarRailWidget: View {
-    let widget: WidgetTile
-
-    @ObservedObject private var sidebar = SidebarPreferences.shared
-
-    var body: some View {
-        WidgetTileView(
-            tile: widget,
-            cornerRadius: 10,
-            renderedSpan: .one,
-            isWithinStack: false
-        )
-        .frame(width: 40, height: 40)
-        .onTapGesture {
-            if widget.kind.isExpandable {
-                sidebar.expandedWidgetIdentifiers = [widget.identifier]
-            }
-            sidebar.isCompact = false
-        }
-        .help(widget.title)
     }
 }

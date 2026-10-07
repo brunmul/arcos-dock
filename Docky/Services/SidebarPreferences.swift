@@ -60,11 +60,14 @@ final class SidebarPreferences: ObservableObject {
         didSet { defaults.set(openFolderIdentifier, forKey: Keys.openFolder) }
     }
 
-    /// The widget unfolded to its detailed view. One at a time, so the
-    /// widgets never push the app list off the panel; kept as a set for
-    /// the stored format.
-    @Published var expandedWidgetIdentifiers: Set<String> {
-        didSet { defaults.set(Array(expandedWidgetIdentifiers), forKey: Keys.expandedWidgets) }
+    /// The icon chosen for each pinned folder, by `SidebarPinnedFolder.id`.
+    /// A folder without an entry gets a default; see `glyph(forFolder:named:)`.
+    @Published var folderGlyphs: [String: SidebarFolderGlyph] {
+        didSet {
+            if let data = try? JSONEncoder().encode(folderGlyphs) {
+                defaults.set(data, forKey: Keys.folderGlyphs)
+            }
+        }
     }
 
     private let defaults = UserDefaults.standard
@@ -75,7 +78,7 @@ final class SidebarPreferences: ObservableObject {
         static let isCompact = "docky.fork.sidebar.isCompact"
         static let expandedApps = "docky.fork.sidebar.expandedApps"
         static let openFolder = "docky.fork.sidebar.openFolder"
-        static let expandedWidgets = "docky.fork.sidebar.expandedWidgets"
+        static let folderGlyphs = "docky.fork.sidebar.folderGlyphs"
     }
 
     private init() {
@@ -85,7 +88,12 @@ final class SidebarPreferences: ObservableObject {
         isCompact = defaults.bool(forKey: Keys.isCompact)
         expandedAppIdentifiers = Set(defaults.stringArray(forKey: Keys.expandedApps) ?? [])
         openFolderIdentifier = defaults.string(forKey: Keys.openFolder)
-        expandedWidgetIdentifiers = Set(defaults.stringArray(forKey: Keys.expandedWidgets) ?? [])
+        if let data = defaults.data(forKey: Keys.folderGlyphs),
+           let stored = try? JSONDecoder().decode([String: SidebarFolderGlyph].self, from: data) {
+            folderGlyphs = stored
+        } else {
+            folderGlyphs = [:]
+        }
     }
 
     func toggleExpansion(ofApp bundleIdentifier: String) {
@@ -100,11 +108,117 @@ final class SidebarPreferences: ObservableObject {
         openFolderIdentifier = openFolderIdentifier == identifier ? nil : identifier
     }
 
-    func toggleWidget(_ identifier: String) {
-        if expandedWidgetIdentifiers.contains(identifier) {
-            expandedWidgetIdentifiers = []
-        } else {
-            expandedWidgetIdentifiers = [identifier]
+    // MARK: - Folder icons
+
+    /// The folder's icon: the one the user picked, otherwise one guessed
+    /// from its name, otherwise a plain folder.
+    func glyph(forFolder identifier: String, named name: String) -> SidebarFolderGlyph {
+        folderGlyphs[identifier] ?? SidebarFolderGlyph.suggested(forName: name)
+    }
+
+    func setGlyphSymbol(_ symbol: String, forFolder identifier: String, named name: String) {
+        var glyph = glyph(forFolder: identifier, named: name)
+        glyph.symbol = symbol
+        folderGlyphs[identifier] = glyph
+    }
+
+    func setGlyphColor(_ color: SidebarFolderGlyph.Tint, forFolder identifier: String, named name: String) {
+        var glyph = glyph(forFolder: identifier, named: name)
+        glyph.tint = color
+        folderGlyphs[identifier] = glyph
+    }
+}
+
+/// A pinned folder's icon in the sidebar: one symbol in one color, picked
+/// from a short list the way a project's icon is picked in Claude.
+struct SidebarFolderGlyph: Codable, Equatable {
+    var symbol: String
+    var tint: Tint
+
+    enum Tint: String, Codable, CaseIterable, Identifiable {
+        case gray, blue, purple, pink, red, orange, yellow, green, teal
+
+        var id: String { rawValue }
+
+        var title: String {
+            rawValue.capitalized
         }
+
+        var nsColor: NSColor {
+            switch self {
+            case .gray: .secondaryLabelColor
+            case .blue: .systemBlue
+            case .purple: .systemPurple
+            case .pink: .systemPink
+            case .red: .systemRed
+            case .orange: .systemOrange
+            case .yellow: .systemYellow
+            case .green: .systemGreen
+            case .teal: .systemTeal
+            }
+        }
+    }
+
+    /// The symbols offered in the folder's menu, with the name shown there.
+    static let choices: [(symbol: String, title: String)] = [
+        ("folder.fill", "Folder"),
+        ("square.grid.2x2.fill", "Apps"),
+        ("wrench.and.screwdriver.fill", "Tools"),
+        ("sparkles", "Sparkles"),
+        ("bubble.left.and.bubble.right.fill", "Chat"),
+        ("play.rectangle.fill", "Media"),
+        ("music.note", "Music"),
+        ("photo.fill", "Photos"),
+        ("paintbrush.fill", "Design"),
+        ("pencil", "Writing"),
+        ("doc.fill", "Documents"),
+        ("book.fill", "Reading"),
+        ("terminal.fill", "Code"),
+        ("chart.bar.fill", "Data"),
+        ("briefcase.fill", "Work"),
+        ("desktopcomputer", "Desktop"),
+        ("arrow.down.circle.fill", "Downloads"),
+        ("globe", "Web"),
+        ("cart.fill", "Shopping"),
+        ("gamecontroller.fill", "Games"),
+        ("house.fill", "Home"),
+        ("heart.fill", "Favorites"),
+        ("star.fill", "Star"),
+        ("bolt.fill", "Bolt"),
+        ("lock.fill", "Private")
+    ]
+
+    /// A starting icon guessed from the folder's name (English and French),
+    /// so a fresh sidebar is not a row of identical folders.
+    static func suggested(forName name: String) -> SidebarFolderGlyph {
+        let lowered = name.lowercased()
+        let rules: [(keywords: [String], symbol: String, tint: Tint)] = [
+            (["util", "outil", "tool", "system", "système"], "wrench.and.screwdriver.fill", .gray),
+            (["media", "média", "video", "vidéo", "film"], "play.rectangle.fill", .red),
+            (["ai", "ia", "intelligence"], "sparkles", .orange),
+            (["com", "chat", "message", "social", "mail"], "bubble.left.and.bubble.right.fill", .green),
+            (["bureau", "desktop"], "desktopcomputer", .blue),
+            (["app"], "square.grid.2x2.fill", .blue),
+            (["download", "télécharg", "telecharg"], "arrow.down.circle.fill", .blue),
+            (["doc"], "doc.fill", .blue),
+            (["music", "musique", "audio"], "music.note", .pink),
+            (["photo", "image", "picture"], "photo.fill", .teal),
+            (["design", "créa", "crea"], "paintbrush.fill", .purple),
+            (["dev", "code"], "terminal.fill", .gray),
+            (["game", "jeu"], "gamecontroller.fill", .purple),
+            (["work", "travail", "pro"], "briefcase.fill", .orange)
+        ]
+
+        for rule in rules {
+            // "ai" and "ia" only as the whole name: they hide in too many
+            // other words ("mail", "media") to match as a fragment.
+            let matches = rule.keywords.contains { keyword in
+                keyword.count <= 2 ? lowered == keyword : lowered.contains(keyword)
+            }
+            if matches {
+                return SidebarFolderGlyph(symbol: rule.symbol, tint: rule.tint)
+            }
+        }
+        return SidebarFolderGlyph(symbol: "folder.fill", tint: .gray)
     }
 }

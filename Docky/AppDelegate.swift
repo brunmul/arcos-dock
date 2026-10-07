@@ -58,6 +58,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         ProfileTriggerEngine.shared.start()
 
         PermissionsService.shared.refresh()
+        PermissionsService.shared.startMonitoringAccessibility()
 
         if PermissionsService.shared.setupComplete {
             PermissionsService.shared.markInitialOnboardingCompleted()

@@ -145,6 +145,7 @@ final class PermissionsService: ObservableObject {
     @Published private(set) var finderAutomationGrantMethod: GrantMethod?
 
     @Published private(set) var accessibility: PermissionStatus = .notDetermined
+    private var accessibilityMonitor: Timer?
     @Published private(set) var accessibilityGrantMethod: GrantMethod?
 
     @Published private(set) var systemEventsAutomation: PermissionStatus = .notDetermined
@@ -405,6 +406,27 @@ final class PermissionsService: ObservableObject {
         let granted = AXIsProcessTrusted()
         accessibility = granted ? .granted : .denied
         accessibilityGrantMethod = granted ? .accessibility : nil
+    }
+
+    /// Notices the accessibility permission being granted or revoked while
+    /// Docky runs. Nothing notifies an app of that change, and the status
+    /// was otherwise only read at launch and from the settings panes, so a
+    /// permission granted from a prompt did nothing until the next launch.
+    /// The check is one cheap call; the published value only changes when
+    /// the answer does.
+    func startMonitoringAccessibility() {
+        guard accessibilityMonitor == nil else { return }
+        let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let granted = AXIsProcessTrusted()
+                if granted != (self.accessibility == .granted) {
+                    self.refreshAccessibility()
+                }
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        accessibilityMonitor = timer
     }
 
     private func refreshScreenCapture() {

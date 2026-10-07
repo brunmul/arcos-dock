@@ -72,7 +72,26 @@ func sidebarAppContextActions(
         .contextActions(for: syntheticTile, modifierFlags: modifierFlags) ?? []
     let windows = WorkspaceService.shared.appWindows(bundleIdentifier: app.bundleIdentifier)
     let withWindows = injectingAppWindowActions(windows, into: baseActions)
-    return injectingCustomIconActions(into: withWindows, for: app)
+    let withIcon = injectingCustomIconActions(into: withWindows, for: app)
+
+    guard let pinAction = sidebarPinAction(for: app) else { return withIcon }
+    return withIcon.isEmpty ? [pinAction] : [pinAction, .divider] + withIcon
+}
+
+/// "Pin" for an open app that is not among the pinned tiles, "Unpin" for
+/// one that is. Nil for Finder, which the dock always keeps.
+private func sidebarPinAction(for app: AppTile) -> ContextAction? {
+    let bundleIdentifier = app.bundleIdentifier
+    guard bundleIdentifier != "com.apple.finder" else { return nil }
+
+    let isPinned = TileStore.shared.tiles.contains { tile in
+        guard tile.id.hasPrefix("pinned:"), case .app(let pinned) = tile.content else { return false }
+        return pinned.bundleIdentifier == bundleIdentifier
+    }
+
+    return .action(isPinned ? "Unpin" : "Pin") {
+        TileStore.shared.setPinnedApp(bundleIdentifier: bundleIdentifier, pinned: !isPinned)
+    }
 }
 
 /// Opens the system's app search: the Apps view on recent macOS, Launchpad
@@ -232,29 +251,27 @@ enum SidebarPinnedFolder: Identifiable, Equatable {
     }
 }
 
-/// A folder as a tile the size of an app tile, showing up to four of the
-/// things inside it the way a phone's home screen draws a folder. That
-/// keeps it apart from an app tile at a glance. Clicking it lists its
-/// contents under the block of tiles.
-///
-/// A Finder folder is read off the main thread. Reading Downloads,
-/// Documents or the Desktop makes macOS ask for access, and that prompt
-/// must never hold up the sidebar itself.
+/// A folder as a tile the size of an app tile, carrying one symbol in one
+/// color, the way a project carries its icon in Claude. The symbol and the
+/// color are picked from the tile's right-click menu. Clicking the tile
+/// lists the folder's contents under the block of tiles.
 struct SidebarFolderTileView: View {
     let folder: SidebarPinnedFolder
     let isCurrent: Bool
     let action: () -> Void
 
-    @ObservedObject private var folderAccess = FolderAccessService.shared
-    @State private var previewURLs: [URL] = []
+    @ObservedObject private var sidebar = SidebarPreferences.shared
     @State private var isHovered = false
 
-    private static let previewIconSize: CGFloat = 11
-    private static let previewSpacing: CGFloat = 2
+    private var glyph: SidebarFolderGlyph {
+        sidebar.glyph(forFolder: folder.id, named: folder.name)
+    }
 
     var body: some View {
         Button(action: action) {
-            preview
+            Image(systemName: glyph.symbol)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color(nsColor: glyph.tint.nsColor))
                 .frame(maxWidth: .infinity)
                 .frame(height: SidebarMetrics.tileHeight)
                 .background(SidebarItemBackground(
@@ -269,75 +286,56 @@ struct SidebarFolderTileView: View {
         .onHover { isHovered = $0 }
         .help(folder.name)
         .accessibilityLabel(folder.name)
-        .task(id: folderAccess.changeToken) {
-            await loadPreview()
+        .background {
+            ContextActionMenuPresenter(
+                actionProvider: { _ in contextActions },
+                preferredEdge: .maxX
+            )
         }
     }
 
-    @ViewBuilder
-    private var preview: some View {
-        switch folder {
-        case .apps(let appFolder):
-            if appFolder.apps.isEmpty {
-                emptyPreview
-            } else {
-                miniGrid(count: min(appFolder.apps.count, 4)) { index in
-                    SidebarAppIcon(
-                        bundleIdentifier: appFolder.apps[index].bundleIdentifier,
-                        size: Self.previewIconSize
-                    )
-                }
-            }
-        case .finder:
-            if previewURLs.isEmpty {
-                emptyPreview
-            } else {
-                miniGrid(count: previewURLs.count) { index in
-                    Image(nsImage: IconCacheService.shared.icon(forFileURL: previewURLs[index]))
-                        .resizable()
-                        .interpolation(.high)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: Self.previewIconSize, height: Self.previewIconSize)
-                }
+    private var contextActions: [ContextAction] {
+        let current = glyph
+        let identifier = folder.id
+        let name = folder.name
+
+        let symbolActions = SidebarFolderGlyph.choices.map { choice in
+            ContextAction.action(
+                choice.title,
+                image: NSImage(systemSymbolName: choice.symbol, accessibilityDescription: nil),
+                isOn: current.symbol == choice.symbol
+            ) {
+                SidebarPreferences.shared.setGlyphSymbol(choice.symbol, forFolder: identifier, named: name)
             }
         }
-    }
 
-    private var emptyPreview: some View {
-        Image(systemName: "folder.fill")
-            .font(.system(size: 14, weight: .medium))
-            .foregroundStyle(.secondary)
-    }
-
-    /// Up to four icons, two per row, top-left first.
-    private func miniGrid<Icon: View>(count: Int, @ViewBuilder icon: @escaping (Int) -> Icon) -> some View {
-        let side = Self.previewIconSize * 2 + Self.previewSpacing
-        return VStack(alignment: .leading, spacing: Self.previewSpacing) {
-            ForEach(0..<2, id: \.self) { row in
-                HStack(spacing: Self.previewSpacing) {
-                    ForEach(0..<2, id: \.self) { column in
-                        let index = row * 2 + column
-                        if index < count {
-                            icon(index)
-                        } else {
-                            Color.clear
-                                .frame(width: Self.previewIconSize, height: Self.previewIconSize)
-                        }
-                    }
-                }
+        let colorActions = SidebarFolderGlyph.Tint.allCases.map { tint in
+            ContextAction.action(
+                tint.title,
+                image: Self.swatch(for: tint),
+                isOn: current.tint == tint
+            ) {
+                SidebarPreferences.shared.setGlyphColor(tint, forFolder: identifier, named: name)
             }
         }
-        .frame(width: side, height: side)
+
+        var actions: [ContextAction] = [
+            .submenu("Icon", children: symbolActions),
+            .submenu("Color", children: colorActions)
+        ]
+        if case .finder(let finderFolder) = folder {
+            actions.append(.divider)
+            actions.append(.action("Open in Finder") {
+                NSWorkspace.shared.open(finderFolder.url)
+            })
+        }
+        return actions
     }
 
-    private func loadPreview() async {
-        guard case .finder(let finderFolder) = folder else { return }
-        let urls = await FolderAccessService.shared.refreshedSortedContents(
-            of: finderFolder.url,
-            sortMode: finderFolder.sortMode
-        )
-        guard !Task.isCancelled else { return }
-        previewURLs = Array(urls.prefix(4))
+    private static func swatch(for tint: SidebarFolderGlyph.Tint) -> NSImage? {
+        let configuration = NSImage.SymbolConfiguration(paletteColors: [tint.nsColor])
+        return NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration)
     }
 }
 
