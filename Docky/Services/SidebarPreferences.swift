@@ -44,6 +44,12 @@ final class SidebarPreferences: ObservableObject {
         didSet { defaults.set(isCompact, forKey: Keys.isCompact) }
     }
 
+    /// Draws app icons as one-color glyphs without their plate, instead
+    /// of the full-color icons.
+    @Published var usesTintedIcons: Bool {
+        didSet { defaults.set(usesTintedIcons, forKey: Keys.usesTintedIcons) }
+    }
+
     /// Width of the panel in the current mode.
     var panelWidth: CGFloat {
         isCompact ? Self.railWidth : Self.fullWidth
@@ -76,6 +82,7 @@ final class SidebarPreferences: ObservableObject {
         static let isEnabled = "docky.fork.sidebar.isEnabled"
         static let isPinned = "docky.fork.sidebar.isPinned"
         static let isCompact = "docky.fork.sidebar.isCompact"
+        static let usesTintedIcons = "docky.fork.sidebar.usesTintedIcons"
         static let expandedApps = "docky.fork.sidebar.expandedApps"
         static let openFolder = "docky.fork.sidebar.openFolder"
         static let folderGlyphs = "docky.fork.sidebar.folderGlyphs"
@@ -86,6 +93,7 @@ final class SidebarPreferences: ObservableObject {
         isEnabled = defaults.object(forKey: Keys.isEnabled) as? Bool ?? true
         isPinned = defaults.object(forKey: Keys.isPinned) as? Bool ?? true
         isCompact = defaults.bool(forKey: Keys.isCompact)
+        usesTintedIcons = defaults.object(forKey: Keys.usesTintedIcons) as? Bool ?? true
         expandedAppIdentifiers = Set(defaults.stringArray(forKey: Keys.expandedApps) ?? [])
         openFolderIdentifier = defaults.string(forKey: Keys.openFolder)
         if let data = defaults.data(forKey: Keys.folderGlyphs),

@@ -35,27 +35,83 @@ enum SidebarMetrics {
     static let foldAnimation = Animation.spring(response: 0.28, dampingFraction: 0.86)
 }
 
-/// An app's icon, honoring the custom icon the user picked for it.
+/// An app's icon, from the first of these that applies:
+///
+///   1. the custom icon pack (`SidebarIconPack`), for the apps it covers;
+///   2. with tinted icons on, a glyph cut out of the app's icon and drawn
+///      in the icon's main color (`SidebarIconGlyph`);
+///   3. the icon picked with "Change Icon...", or the app's own.
 struct SidebarAppIcon: View {
     let bundleIdentifier: String
     let size: CGFloat
 
     @Bindable private var preferences = DockyPreferences.shared
+    @ObservedObject private var iconPack = SidebarIconPack.shared
+    @ObservedObject private var sidebar = SidebarPreferences.shared
+
+    private static let ink = Color.primary.opacity(0.74)
 
     var body: some View {
-        Image(nsImage: image)
-            .resizable()
-            .interpolation(.high)
-            .aspectRatio(contentMode: .fit)
-            .frame(width: size, height: size)
+        if let packIcon = iconPack.icon(forBundleIdentifier: bundleIdentifier) {
+            SidebarPackIconView(icon: packIcon, ink: Self.ink)
+                .frame(width: size, height: size)
+        } else if sidebar.usesTintedIcons, let glyph = SidebarIconGlyph.glyph(for: image, key: glyphKey) {
+            Image(nsImage: glyph.image)
+                .renderingMode(.template)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+                .foregroundStyle(glyph.tint.map { Color(nsColor: $0) } ?? Self.ink)
+                .frame(width: size, height: size)
+        } else {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+        }
+    }
+
+    private var overrideURL: URL? {
+        preferences.effectiveAppIconOverrideURL(forBundleIdentifier: bundleIdentifier)
     }
 
     private var image: NSImage {
-        if let overrideURL = preferences.effectiveAppIconOverrideURL(forBundleIdentifier: bundleIdentifier),
-           let overrideImage = IconCacheService.shared.image(forImageFileURL: overrideURL) {
+        if let overrideURL, let overrideImage = IconCacheService.shared.image(forImageFileURL: overrideURL) {
             return overrideImage
         }
         return IconCacheService.shared.icon(forBundleIdentifier: bundleIdentifier)
+    }
+
+    /// A custom icon gets its own glyph, apart from the app's stock one.
+    private var glyphKey: String {
+        if let overrideURL {
+            return "\(bundleIdentifier)|\(overrideURL.path)"
+        }
+        return bundleIdentifier
+    }
+}
+
+/// An icon from the custom pack: a glyph takes the given ink, a colored
+/// icon is drawn as it is.
+struct SidebarPackIconView: View {
+    let icon: SidebarPackIcon
+    let ink: Color
+
+    var body: some View {
+        if icon.isGlyph {
+            Image(nsImage: icon.image)
+                .renderingMode(.template)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+                .foregroundStyle(ink)
+        } else {
+            Image(nsImage: icon.image)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+        }
     }
 }
 
@@ -261,6 +317,7 @@ struct SidebarFolderTileView: View {
     let action: () -> Void
 
     @ObservedObject private var sidebar = SidebarPreferences.shared
+    @ObservedObject private var iconPack = SidebarIconPack.shared
     @Environment(\.colorScheme) private var colorScheme
     @State private var isHovered = false
 
@@ -273,10 +330,7 @@ struct SidebarFolderTileView: View {
         let shape = RoundedRectangle(cornerRadius: SidebarMetrics.tileCornerRadius, style: .continuous)
 
         Button(action: action) {
-            Image(systemName: glyph.outlineSymbol)
-                .font(.system(size: 13, weight: .light))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(tint)
+            mark(tint: tint)
                 .frame(maxWidth: .infinity)
                 .frame(height: SidebarMetrics.tileHeight)
                 .background(shape.fill(tint.opacity(washOpacity)))
@@ -296,6 +350,21 @@ struct SidebarFolderTileView: View {
                 actionProvider: { _ in contextActions },
                 preferredEdge: .maxX
             )
+        }
+    }
+
+    /// The folder's icon from the custom pack when it has one, otherwise
+    /// its symbol.
+    @ViewBuilder
+    private func mark(tint: Color) -> some View {
+        if let packIcon = iconPack.icon(forFolderNamed: folder.name) {
+            SidebarPackIconView(icon: packIcon, ink: tint)
+                .frame(width: 18, height: 18)
+        } else {
+            Image(systemName: glyph.outlineSymbol)
+                .font(.system(size: 13, weight: .light))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(tint)
         }
     }
 

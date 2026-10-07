@@ -13,3 +13,5 @@ __pycache__/
 
 # Written by debug builds (DevelopmentDiagnostics)
 .docky-dev-state.txt
+
+.docky-dev-glyphs/

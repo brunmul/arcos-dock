@@ -354,6 +354,10 @@ private struct SidebarHeader: View {
                     get: { !sidebar.isPinned },
                     set: { sidebar.isPinned = !$0 }
                 ))
+                Toggle("Tinted Icons", isOn: $sidebar.usesTintedIcons)
+                Button("Open Icon Pack Folder") {
+                    SidebarIconPack.shared.revealInFinder()
+                }
                 Divider()
                 Button("Settings…") {
                     (NSApp.delegate as? AppDelegate)?.showSettingsWindow(nil)
