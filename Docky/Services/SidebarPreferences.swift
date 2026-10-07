@@ -17,12 +17,13 @@ import Foundation
 final class SidebarPreferences: ObservableObject {
     static let shared = SidebarPreferences()
 
-    /// Width of the full sidebar, without the gap to the screen edge.
+    /// Width of the full sidebar.
     static let fullWidth: CGFloat = 200
     /// Width of the compact sidebar, the icon-only rail.
-    static let railWidth: CGFloat = 56
-    /// Gap between the panel and the screen edges it floats next to.
-    static let screenMargin: CGFloat = 6
+    static let railWidth: CGFloat = 52
+    /// Radius of the concave corners drawn where the sidebar meets the
+    /// rest of the screen.
+    static let cornerRadius: CGFloat = 12
 
     /// Whether Docky shows the sidebar instead of the dock strip. Change it
     /// through `SidebarWindowController.setSidebarMode(_:)`, which also

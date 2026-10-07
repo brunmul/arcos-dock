@@ -2,9 +2,17 @@
 //  SidebarWindowController.swift
 //  Docky
 //
-//  Owns the sidebar panel: a borderless, non-activating window floating
-//  along the left edge of the primary display, between the menu bar and
-//  the bottom of the screen.
+//  Owns the sidebar panel: a borderless, non-activating window set flush
+//  against the left edge of the primary display, from the top of the
+//  usable area to the bottom. It is opaque and has no margin or rounded
+//  outline of its own, so it reads as part of the screen's frame rather
+//  than as a card floating over the desktop, the way Arc's sidebar wraps
+//  its page.
+//
+//  A second, click-through panel sits just to its right and draws two
+//  concave corners in the sidebar's color, at the top and the bottom. They
+//  round off the area next to the sidebar, so the windows there look set
+//  into it.
 //
 //  Pinned, it stays put. Unpinned, it fades out and comes back when the
 //  pointer rests on the left edge, then leaves again shortly after the
@@ -26,6 +34,7 @@ final class SidebarWindowController: NSObject {
 
     private let preferences = SidebarPreferences.shared
     private var panel: SidebarPanel?
+    private var cornersPanel: NSPanel?
     private var cancellables = Set<AnyCancellable>()
     private var pointerTimer: Timer?
     private var isRevealed = true
@@ -55,12 +64,21 @@ final class SidebarWindowController: NSObject {
     func show() {
         let panel = panel ?? makePanel()
         self.panel = panel
+        let cornersPanel = cornersPanel ?? makeCornersPanel()
+        self.cornersPanel = cornersPanel
 
         applyFrame()
         isRevealed = true
         panel.alphaValue = 1
         panel.ignoresMouseEvents = false
         panel.orderFrontRegardless()
+
+        // A child window is ordered out with its parent and stays right
+        // above it, so the corners never outlive or sink under the sidebar.
+        cornersPanel.alphaValue = 1
+        if cornersPanel.parent == nil {
+            panel.addChildWindow(cornersPanel, ordered: .above)
+        }
 
         observeInputsIfNeeded()
         updatePointerTracking()
@@ -86,7 +104,7 @@ final class SidebarWindowController: NSObject {
         let frame = CGRect(
             x: visible.minX,
             y: visible.minY,
-            width: preferences.panelWidth + SidebarPreferences.screenMargin * 2,
+            width: preferences.panelWidth,
             height: visible.height
         )
         return (screen, frame)
@@ -125,6 +143,41 @@ final class SidebarWindowController: NSObject {
         return panel
     }
 
+    /// The strip to the right of the sidebar that carries the two concave
+    /// corners. It never takes a click: everything in it but the corners is
+    /// empty, and what lies under it belongs to other apps.
+    private func makeCornersPanel() -> NSPanel {
+        let panel = NSPanel(
+            contentRect: .zero,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.level = .mainMenu
+        panel.hidesOnDeactivate = false
+        panel.ignoresMouseEvents = true
+        panel.isMovable = false
+        panel.isReleasedWhenClosed = false
+        panel.collectionBehavior = DockyPreferences.shared.windowSpaceBehavior
+            .collectionBehavior(includesFullScreenAuxiliary: false)
+        let hostingView = NSHostingView(rootView: SidebarCornersView())
+        hostingView.sizingOptions = []
+        panel.contentView = hostingView
+        return panel
+    }
+
+    private func cornersFrame(besides frame: CGRect) -> CGRect {
+        CGRect(
+            x: frame.maxX,
+            y: frame.minY,
+            width: SidebarPreferences.cornerRadius,
+            height: frame.height
+        )
+    }
+
     private func targetScreen() -> NSScreen? {
         NSScreen.screens.first ?? NSScreen.main
     }
@@ -132,19 +185,20 @@ final class SidebarWindowController: NSObject {
     private func panelFrame() -> CGRect? {
         guard let screen = targetScreen() else { return nil }
         let visible = screen.visibleFrame
-        let margin = SidebarPreferences.screenMargin
         return CGRect(
-            x: visible.minX + margin,
-            y: visible.minY + margin,
+            x: visible.minX,
+            y: visible.minY,
             width: preferences.panelWidth,
-            height: max(0, visible.height - margin * 2)
+            height: visible.height
         )
     }
 
     private func applyFrame(animated: Bool = false) {
         guard let panel, let frame = panelFrame() else { return }
+        let corners = cornersFrame(besides: frame)
         guard animated, panel.isVisible else {
             panel.setFrame(frame, display: true)
+            cornersPanel?.setFrame(corners, display: true)
             return
         }
 
@@ -152,6 +206,7 @@ final class SidebarWindowController: NSObject {
             context.duration = animationDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             panel.animator().setFrame(frame, display: true)
+            cornersPanel?.animator().setFrame(corners, display: true)
         }
     }
 
@@ -261,6 +316,7 @@ final class SidebarWindowController: NSObject {
             context.duration = animationDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             panel.animator().alphaValue = revealed ? 1 : 0
+            cornersPanel?.animator().alphaValue = revealed ? 1 : 0
         }
     }
 }

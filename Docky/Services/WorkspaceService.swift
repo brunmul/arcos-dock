@@ -156,8 +156,51 @@ final class WorkspaceService: ObservableObject {
         }
 
         // Default: bring the app forward.
+        bringForward(runningApp, bundleIdentifier: bundleIdentifier, canSeeWindows: accessibilityGranted)
+    }
+
+    /// Brings a running app to the front, the way a click on its Dock icon
+    /// does.
+    ///
+    /// Without the accessibility permission Docky cannot tell whether the
+    /// app has a window on screen. Activating an app whose windows are all
+    /// closed or minimized changes nothing visible, so in that case the
+    /// click goes through LaunchServices instead: it activates the app and
+    /// sends it the "reopen" event the Dock sends, which brings a window
+    /// back.
+    ///
+    /// With the permission, activation is direct, then checked: macOS is
+    /// free to ignore an activation request from an app that is not itself
+    /// in front, and when it does the click falls back to LaunchServices
+    /// rather than doing nothing.
+    private func bringForward(
+        _ runningApp: NSRunningApplication,
+        bundleIdentifier: String,
+        canSeeWindows: Bool
+    ) {
         runningApp.unhide()
+
+        let appURL = runningApp.bundleURL
+            ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier)
+
+        guard canSeeWindows else {
+            if let appURL {
+                openApplication(at: appURL)
+            } else {
+                runningApp.activateTransferringFrontmost(options: [.activateAllWindows])
+            }
+            return
+        }
+
         runningApp.activateTransferringFrontmost(options: [.activateAllWindows])
+
+        guard let appURL else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard !runningApp.isTerminated,
+                  NSWorkspace.shared.frontmostApplication?.bundleIdentifier != bundleIdentifier
+            else { return }
+            self?.openApplication(at: appURL)
+        }
     }
 
     /// Whether the window server knows a live, ordinary window for `pid` that

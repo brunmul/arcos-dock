@@ -31,6 +31,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
         window?.orderOut(nil)
         NSApplication.shared.setActivationPolicy(.accessory)
+        quitOtherInstances()
         configureMainMenu()
         SystemDockVisibilityService.shared.recoverStaleSnapshotIfNeeded()
 
@@ -394,6 +395,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         mainWindowController = makeMainWindowController()
         applyDockPresentation()
         DockyPreferences.shared.enableOpenAtLoginOnFirstLaunchIfNeeded()
+    }
+
+    /// Two copies of Docky draw two docks on top of each other and both
+    /// answer every click, which looks like clicks failing at random. The
+    /// copy launched last wins, so a fresh build replaces one left running.
+    private func quitOtherInstances() {
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier else { return }
+        let current = NSRunningApplication.current
+        for app in NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+        where app.processIdentifier != current.processIdentifier {
+            app.terminate()
+        }
     }
 
     /// Shows whichever presentation is selected: the sidebar on the left

@@ -34,7 +34,6 @@ struct SidebarView: View {
     @ObservedObject private var permissions = PermissionsService.shared
     @Bindable private var preferences = DockyPreferences.shared
 
-    private static let cornerRadius: CGFloat = 16
     private static let horizontalPadding: CGFloat = 8
 
     var body: some View {
@@ -52,8 +51,7 @@ struct SidebarView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .dockyWidgetGlass(cornerRadius: Self.cornerRadius)
-        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+        .background(SidebarChrome())
     }
 
     private var fullSidebar: some View {
@@ -224,6 +222,84 @@ struct SidebarView: View {
             }
             return false
         }
+    }
+}
+
+// MARK: - Chrome
+
+/// The sidebar's surface: opaque, in the window background color with the
+/// dock's own tint over it, so it sits a shade apart from the windows next
+/// to it and follows the tint chosen in Docky's appearance settings.
+/// Opaque on purpose: the sidebar is meant to read as part of the screen's
+/// frame, not as glass floating over the desktop.
+struct SidebarChrome: View {
+    @Bindable private var preferences = DockyPreferences.shared
+
+    var body: some View {
+        ZStack {
+            Color(nsColor: .windowBackgroundColor)
+            Color(nsColor: preferences.effectiveWindowTintColor)
+                .opacity(preferences.effectiveWindowTintOpacity)
+        }
+    }
+}
+
+/// The two concave corners drawn just right of the sidebar, at the top and
+/// the bottom, in the sidebar's own surface. They round off the area next
+/// to the sidebar so the windows there look set into it.
+struct SidebarCornersView: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            corner(isTop: true)
+            Spacer(minLength: 0)
+            corner(isTop: false)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
+    }
+
+    private func corner(isTop: Bool) -> some View {
+        SidebarChrome()
+            .frame(width: SidebarPreferences.cornerRadius, height: SidebarPreferences.cornerRadius)
+            .clipShape(SidebarConcaveCorner(isTop: isTop))
+    }
+}
+
+/// A square with a quarter disc cut out of it: what is left of the corner
+/// once the neighbouring area has been rounded. The square hugs the
+/// sidebar on its left and the screen edge above (or below) it.
+private struct SidebarConcaveCorner: Shape {
+    let isTop: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let radius = rect.width
+        var path = Path()
+
+        if isTop {
+            // Disc centered on the square's bottom-right corner.
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addRelativeArc(
+                center: CGPoint(x: rect.maxX, y: rect.maxY),
+                radius: radius,
+                startAngle: .degrees(-90),
+                delta: .degrees(-90)
+            )
+        } else {
+            // Disc centered on the square's top-right corner.
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+            path.addRelativeArc(
+                center: CGPoint(x: rect.maxX, y: rect.minY),
+                radius: radius,
+                startAngle: .degrees(90),
+                delta: .degrees(90)
+            )
+        }
+
+        path.closeSubpath()
+        return path
     }
 }
 
