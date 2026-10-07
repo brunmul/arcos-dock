@@ -26,6 +26,11 @@ private final class AppUpdateFeedDelegate: NSObject, SPUUpdaterDelegate {
 
 final class AppUpdateService: ObservableObject {
     static let shared = AppUpdateService()
+
+    /// Personal fork: Sparkle would replace this build with the upstream
+    /// release from getdocky.com and wipe local changes, so the updater is
+    /// never started. Flip to `true` only if the fork gets its own appcast.
+    static let updatesEnabled = false
     static let feedURLString = "https://getdocky.com/releases/appcast.xml"
 
     @Published private(set) var canCheckForUpdates: Bool
@@ -63,7 +68,7 @@ final class AppUpdateService: ObservableObject {
         feedDelegate = AppUpdateFeedDelegate(fallbackFeedURLString: Self.feedURLString)
 
         updaterController = SPUStandardUpdaterController(
-            startingUpdater: true,
+            startingUpdater: Self.updatesEnabled,
             updaterDelegate: feedDelegate,
             userDriverDelegate: nil
         )
@@ -104,11 +109,12 @@ final class AppUpdateService: ObservableObject {
     }
 
     func checkForUpdates() {
+        guard Self.updatesEnabled else { return }
         updater.checkForUpdates()
     }
 
     func checkForUpdatesInBackground() {
-        guard automaticallyChecksForUpdates, canCheckForUpdates else { return }
+        guard Self.updatesEnabled, automaticallyChecksForUpdates, canCheckForUpdates else { return }
         updater.checkForUpdatesInBackground()
     }
 }

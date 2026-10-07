@@ -1766,7 +1766,19 @@ final class TileStore: ObservableObject {
             return
         }
 
-        preferences.pinnedItems = pinnedItems
+        preferences.pinnedItems = pinnedItems + Self.personalForkStarterWidgets
+    }
+
+    /// Personal fork: a first launch starts with the widgets this dock was
+    /// built around, after the apps imported from the macOS Dock. Only
+    /// seeded when Docky has no layout yet; afterwards they are ordinary
+    /// tiles that can be moved, resized, or removed in Edit Dock.
+    private static var personalForkStarterWidgets: [PinnedTileItem] {
+        [
+            .widget(kind: .calendar, ownerBundleIdentifier: WidgetOwnerBundleIdentifiers.calendar, span: .three),
+            .widget(kind: .nowPlaying, ownerBundleIdentifier: WidgetOwnerBundleIdentifiers.genericNowPlaying, span: .three),
+            .widget(kind: .systemStatus, ownerBundleIdentifier: WidgetOwnerBundleIdentifiers.systemStatus, span: .two),
+        ]
     }
 
     private func refreshPinnedTilesFromPreferences() {

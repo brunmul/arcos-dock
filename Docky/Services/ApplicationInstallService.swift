@@ -20,6 +20,11 @@ final class ApplicationInstallService {
 
     @discardableResult
     func promptToMoveToApplicationsIfNeeded() -> Bool {
+        #if DEBUG
+        // Personal fork: Debug builds run straight from Xcode's build
+        // folder, so never offer to move them into /Applications.
+        return false
+        #else
         guard needsToMoveToApplications else {
             clearPromptDeferral()
             return false
@@ -41,6 +46,7 @@ final class ApplicationInstallService {
 
         defaults.set(currentBundlePath, forKey: promptDeferralKey)
         return false
+        #endif
     }
 
     private var needsToMoveToApplications: Bool {

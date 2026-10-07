@@ -3689,7 +3689,14 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
         static let windowPreviewHoverDelay: TimeInterval = 1.0
         static let windowPreviewLayout: WindowSwitcherLayout = .auto
         static let maximizedWindowBehavior: MaximizedWindowBehavior = .ignore
+        // Personal fork: Debug builds leave the macOS Dock alone until
+        // "Hide System Dock" is switched on, so a dev run stopped from
+        // Xcode can never leave the Mac without a Dock.
+        #if DEBUG
+        static let hidesSystemDock = false
+        #else
         static let hidesSystemDock = true
+        #endif
         static let overflowBehavior: DockOverflowBehavior = .rescale
         static let windowAxisSizing: DockWindowAxisSizing = .fitContent
         static let enablesWidgetHoverPreview = true
