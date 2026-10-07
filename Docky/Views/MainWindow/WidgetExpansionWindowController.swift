@@ -13,7 +13,7 @@ final class WidgetExpansionWindowController: NSWindowController, ObservableObjec
     @Published private(set) var activeSourceTileID: String?
 
     private static let contentPadding: CGFloat = 8
-    private static let animationDuration: TimeInterval = 0.18
+    private static let animationDuration: TimeInterval = 0.12
     private static let slideOffset: CGFloat = 12
     private static let minimumExpansionBaseTileSize: CGFloat = 80
 

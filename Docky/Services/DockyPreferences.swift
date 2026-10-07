@@ -3701,7 +3701,10 @@ enum LaunchpadSortMode: String, CaseIterable, Codable, Identifiable {
         static let windowAxisSizing: DockWindowAxisSizing = .fitContent
         static let enablesWidgetHoverPreview = true
         static let widgetHoverPreviewSpans: Set<TileSpan> = Set(TileSpan.allCases)
-        static let widgetHoverPreviewDelay: TimeInterval = 1
+        // Personal fork: the hover panel opens almost at once (upstream
+        // waits a full second). Still a hair above zero so sweeping the
+        // pointer across the dock does not flash every widget open.
+        static let widgetHoverPreviewDelay: TimeInterval = 0.12
         static let showsActivePinnedSeparator = true
         static let showsRunningApps = true
         static let showsMinimizedWindows = true
