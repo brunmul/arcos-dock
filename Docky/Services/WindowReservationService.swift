@@ -83,11 +83,11 @@ final class WindowReservationService {
     }
 
     private func scan(windows: [AppWindow]) {
-        guard let mainWindow = NSApp.windows.compactMap({ $0 as? MainWindow }).first,
-              let dockyScreen = mainWindow.screen,
-              let dockyFrame = mainWindow.currentReservationFrame,
+        guard let reservation = currentReservation(),
               let primaryScreenHeight = NSScreen.screens.first?.frame.height
         else { return }
+        let dockyScreen = reservation.screen
+        let dockyFrame = reservation.frame
 
         let visibleFrame = dockyScreen.visibleFrame
         guard let dockySide = side(of: dockyFrame, on: visibleFrame) else { return }
@@ -128,6 +128,19 @@ final class WindowReservationService {
                 windowCooldowns[window.id] = now.addingTimeInterval(cooldownInterval)
             }
         }
+    }
+
+    /// The strip of screen Docky occupies: the pinned sidebar when that
+    /// presentation is on, otherwise the dock strip.
+    private func currentReservation() -> (screen: NSScreen, frame: CGRect)? {
+        if let sidebar = SidebarWindowController.shared.currentReservation {
+            return sidebar
+        }
+        guard let mainWindow = NSApp.windows.compactMap({ $0 as? MainWindow }).first,
+              let screen = mainWindow.screen,
+              let frame = mainWindow.currentReservationFrame
+        else { return nil }
+        return (screen, frame)
     }
 
     /// Flips a rect between AX (top-left origin, Y grows down) and NSScreen

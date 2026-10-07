@@ -377,8 +377,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private func showMainWindow() {
         mainWindowController = makeMainWindowController()
-        mainWindowController?.showWindow(self)
+        applyDockPresentation()
         DockyPreferences.shared.enableOpenAtLoginOnFirstLaunchIfNeeded()
+    }
+
+    /// Shows whichever presentation is selected: the sidebar on the left
+    /// edge, or the dock strip. The dock strip's window stays loaded in
+    /// sidebar mode because the Launchpad, window switcher and other
+    /// overlays are attached to it; it just stays off screen.
+    func applyDockPresentation() {
+        if SidebarPreferences.shared.isEnabled {
+            mainWindowController?.window?.orderOut(nil)
+            SidebarWindowController.shared.show()
+        } else {
+            SidebarWindowController.shared.hide()
+            mainWindowController?.showWindow(self)
+        }
     }
 
     private func makeMainWindowController() -> MainWindowController? {

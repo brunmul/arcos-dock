@@ -227,7 +227,8 @@ final class MainWindow: NSPanel {
     /// hidden / off-screen / not currently rendering. Used by services that
     /// keep other apps' windows out of Docky's way.
     var currentReservationFrame: CGRect? {
-        visibilityState == .visible ? frame : nil
+        guard !SidebarPreferences.shared.isEnabled else { return nil }
+        return visibilityState == .visible ? frame : nil
     }
 
     /// Screen-coordinate rect of the visible chrome (the dock pill itself,
@@ -322,6 +323,12 @@ final class MainWindow: NSPanel {
     }
 
     override func order(_ place: NSWindow.OrderingMode, relativeTo otherWin: Int) {
+        // In sidebar mode the dock strip stays off screen. Every path that
+        // would bring it back (the nib, autohide reveal, space changes)
+        // ends up here, so this is the one place to refuse.
+        if place != .out, SidebarPreferences.shared.isEnabled {
+            return
+        }
         super.order(place, relativeTo: otherWin)
         applyBackgroundBlur()
     }

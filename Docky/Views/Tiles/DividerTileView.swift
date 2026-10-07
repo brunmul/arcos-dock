@@ -55,6 +55,9 @@ struct DividerTileView: View {
             .action(String(localized: "Edit Dock...")) {
                 DockEditModeService.shared.enter()
             },
+            .action("Switch to Sidebar") {
+                SidebarWindowController.shared.setSidebarMode(true)
+            },
             .divider,
             .submenu(String(localized: "Troubleshoot"), children: troubleshootActions),
             .action(String(localized: "Send Feedback...")) {

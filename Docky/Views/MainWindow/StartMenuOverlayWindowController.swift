@@ -318,6 +318,12 @@ private struct StartMenuView: View {
     @ObservedObject private var service = StartMenuService.shared
     @Bindable private var preferences = DockyPreferences.shared
     @State private var query = ""
+    /// The file sections read icons from Documents, Downloads and friends,
+    /// which makes macOS ask for access to each. This view is built at
+    /// launch, long before the menu is ever opened, so those sections wait
+    /// for the first presentation instead of prompting (and blocking the
+    /// main thread) on every start.
+    @State private var hasBeenPresented = false
     @FocusState private var searchFocused: Bool
 
     private let mainWidth: CGFloat = 440
@@ -437,6 +443,11 @@ private struct StartMenuView: View {
         }
         .animation(.easeInOut(duration: 0.18), value: service.showsAllApps)
         .onAppear { searchFocused = true }
+        .onChange(of: service.isPresented) { _, isPresented in
+            if isPresented {
+                hasBeenPresented = true
+            }
+        }
     }
 
     private var mainPanel: some View {
@@ -459,8 +470,10 @@ private struct StartMenuView: View {
                 Divider()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        recentsSection
-                        homeSection
+                        if hasBeenPresented || service.isPresented {
+                            recentsSection
+                            homeSection
+                        }
                         appsSection
                     }
                     .padding(.horizontal, 16)
