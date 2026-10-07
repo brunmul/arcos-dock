@@ -39,12 +39,17 @@ struct NowPlayingWidgetTileView: View {
                         .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
                 }
 
+                // Both layouts get the tile's exact size. The compact one is
+                // sized off the height, so in a tall narrow panel (the
+                // sidebar, unfolded) it reports a width larger than the
+                // tile and would stretch the expanded view along with it.
                 content(layout: layout)
+                    .frame(width: proxy.size.width, height: proxy.size.height)
                     .opacity(isExpandedPreviewOpen && isExpanded ? 0 : 1)
 
                 if isExpanded {
                     expandedContent(layout: expandedLayout)
-                        .frame(height: proxy.size.height)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
                         .transition(
                             .opacity.animation(
                                 .easeInOut(duration: 0.22).delay(0.22)
@@ -57,6 +62,7 @@ struct NowPlayingWidgetTileView: View {
                         .transition(.opacity)
                 }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
             .dockyWidgetGlass(cornerRadius: cornerRadius)
             .animation(.easeInOut(duration: 0.18), value: isLyricsOverlayPresented)
             .animation(.easeInOut(duration: 0.22), value: isExpanded)
@@ -159,27 +165,17 @@ struct NowPlayingWidgetTileView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
+    /// Wide (the dock's hover panel): artwork on the left at full height,
+    /// everything else beside it. Narrow (the sidebar): a small artwork
+    /// next to the title, then controls and progress across the width.
+    @ViewBuilder
     private func expandedContent(layout: ExpandedLayoutMetrics) -> some View {
-        HStack(spacing: layout.contentGap) {
-            artworkView(size: layout.artworkSize, artworkCornerRadius: layout.artworkCornerRadius)
-                .frame(width: layout.artworkSize, height: layout.artworkSize)
-                .shadow(color: .black.opacity(0.18), radius: layout.artworkSize * 0.05, x: 0, y: layout.artworkSize * 0.03)
-
+        if layout.isNarrow {
             VStack(alignment: .leading, spacing: layout.sectionSpacing) {
-                VStack(alignment: .leading, spacing: layout.titleStackSpacing) {
-                    Text(playbackTitle)
-                        .font(.system(size: layout.titleFontSize, weight: .semibold))
-                        .foregroundStyle(primaryForegroundColor)
-                        .lineLimit(2)
-                        .truncationMode(.tail)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text(secondaryDescription)
-                        .font(.system(size: layout.subtitleFontSize, weight: .medium))
-                        .foregroundStyle(secondaryForegroundColor)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                HStack(spacing: layout.contentGap) {
+                    expandedArtwork(layout: layout)
+                    expandedTitles(layout: layout)
+                    Spacer(minLength: 0)
                 }
 
                 Spacer(minLength: 0)
@@ -188,10 +184,50 @@ struct NowPlayingWidgetTileView: View {
 
                 progressSection(layout: layout)
             }
+            .padding(layout.contentPadding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        } else {
+            HStack(spacing: layout.contentGap) {
+                expandedArtwork(layout: layout)
+
+                VStack(alignment: .leading, spacing: layout.sectionSpacing) {
+                    expandedTitles(layout: layout)
+
+                    Spacer(minLength: 0)
+
+                    controlRow(layout: layout)
+
+                    progressSection(layout: layout)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+            .padding(layout.contentPadding)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .padding(layout.contentPadding)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func expandedArtwork(layout: ExpandedLayoutMetrics) -> some View {
+        artworkView(size: layout.artworkSize, artworkCornerRadius: layout.artworkCornerRadius)
+            .frame(width: layout.artworkSize, height: layout.artworkSize)
+            .shadow(color: .black.opacity(0.18), radius: layout.artworkSize * 0.05, x: 0, y: layout.artworkSize * 0.03)
+    }
+
+    private func expandedTitles(layout: ExpandedLayoutMetrics) -> some View {
+        VStack(alignment: .leading, spacing: layout.titleStackSpacing) {
+            Text(playbackTitle)
+                .font(.system(size: layout.titleFontSize, weight: .semibold))
+                .foregroundStyle(primaryForegroundColor)
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(secondaryDescription)
+                .font(.system(size: layout.subtitleFontSize, weight: .medium))
+                .foregroundStyle(secondaryForegroundColor)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
     }
 
     private func progressSection(layout: ExpandedLayoutMetrics) -> some View {
@@ -449,12 +485,16 @@ struct NowPlayingWidgetTileView: View {
         let progressLabelSpacing = min(max(minSide * 0.012, 3), 6)
 
         let availableHeight = max(0, height - contentPadding * 2)
-        let artworkSize = availableHeight
+        // Narrow panels (the sidebar) cannot give the artwork the full
+        // height without squeezing the title and controls out.
+        let isNarrow = width < 260
+        let artworkSize = isNarrow ? min(availableHeight, 44) : availableHeight
 
         let primaryControlButtonSize = min(max(minSide * 0.16, 36), 60)
         let controlButtonSize = min(max(minSide * 0.12, 28), 46)
 
         return ExpandedLayoutMetrics(
+            isNarrow: isNarrow,
             contentPadding: contentPadding,
             contentGap: contentGap,
             sectionSpacing: sectionSpacing,
@@ -751,6 +791,7 @@ private struct LayoutMetrics {
 }
 
 private struct ExpandedLayoutMetrics {
+    let isNarrow: Bool
     let contentPadding: CGFloat
     let contentGap: CGFloat
     let sectionSpacing: CGFloat

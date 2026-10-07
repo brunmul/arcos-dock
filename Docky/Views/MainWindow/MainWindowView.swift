@@ -18,16 +18,29 @@ struct MainWindowView: View {
     @ObservedObject private var layoutService = DockLayoutService.shared
     private let magnification = DockMagnificationService.shared
     @ObservedObject private var chromeMetrics = DockChromeMetricsService.shared
+    @ObservedObject private var sidebar = SidebarPreferences.shared
 
     var body: some View {
         #if DEBUG
         let _ = Self._printChanges()
         #endif
 
+        // In sidebar mode this window stays off screen, so there is nothing
+        // to draw. Skipping the tiles also keeps the hidden strip from
+        // reading the pinned folders, which is what makes macOS ask for
+        // access to Downloads at launch.
+        if sidebar.isEnabled {
+            Color.clear
+        } else {
+            dockStrip
+        }
+    }
+
+    private var dockStrip: some View {
         let chromeFrameSize = resolvedChromeFrameSize
         let dockEdge = dockEdgeAlignment
 
-        ZStack(alignment: dockEdge) {
+        return ZStack(alignment: dockEdge) {
             chromeBackground()
                 .frame(width: chromeFrameSize?.width, height: chromeFrameSize?.height)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: dockEdge)

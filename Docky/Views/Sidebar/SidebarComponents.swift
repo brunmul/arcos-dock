@@ -2,15 +2,38 @@
 //  SidebarComponents.swift
 //  Docky
 //
-//  The app-related pieces of the sidebar: the favorites grid, the foldable
-//  app folders, and the open apps that unfold into their windows. Layout
-//  and data wiring live in `SidebarView`.
+//  The rows and tiles the sidebar is built from: the tiles of the pinned
+//  apps and folders, the list a folder opens into, the open apps that
+//  unfold into their windows, and the small controls they share. Layout and data wiring live
+//  in `SidebarView`.
 //
 
 import AppKit
 import SwiftUI
 
-// MARK: - Shared
+// MARK: - Metrics and shared pieces
+
+/// One set of sizes for every row, so the list reads as a single column:
+/// a 16pt icon, a 13pt label, 28pt tall, like a browser's vertical tabs.
+enum SidebarMetrics {
+    static let rowHeight: CGFloat = 28
+    static let rowIconSize: CGFloat = 16
+    static let rowFontSize: CGFloat = 13
+    static let rowSpacing: CGFloat = 8
+    static let rowPadding: CGFloat = 8
+    /// Where a nested row's content starts: under its parent's label.
+    static let nestedIndent: CGFloat = rowPadding + rowIconSize + rowSpacing
+    static let tileHeight: CGFloat = 34
+    static let tileIconSize: CGFloat = 20
+    static let tileCornerRadius: CGFloat = 9
+    static let tileSpacing: CGFloat = 5
+    /// Four tiles across, for the pinned apps and the pinned folders.
+    static let tileColumns = Array(
+        repeating: GridItem(.flexible(minimum: 32), spacing: tileSpacing),
+        count: 4
+    )
+    static let foldAnimation = Animation.spring(response: 0.28, dampingFraction: 0.86)
+}
 
 /// An app's icon, honoring the custom icon the user picked for it.
 struct SidebarAppIcon: View {
@@ -52,6 +75,20 @@ func sidebarAppContextActions(
     return injectingCustomIconActions(into: withWindows, for: app)
 }
 
+/// Opens the system's app search: the Apps view on recent macOS, Launchpad
+/// before it, and Docky's own Launchpad when neither is installed.
+func sidebarOpenAppSearch() {
+    let candidates = [
+        "/System/Applications/Apps.app",
+        "/System/Applications/Launchpad.app"
+    ]
+    for path in candidates where FileManager.default.fileExists(atPath: path) {
+        NSWorkspace.shared.open(URL(fileURLWithPath: path))
+        return
+    }
+    LaunchpadOverlayService.shared.present()
+}
+
 /// Unread count next to an app, as the Dock reports it.
 private struct SidebarBadge: View {
     let text: String
@@ -62,56 +99,56 @@ private struct SidebarBadge: View {
             .monospacedDigit()
             .foregroundStyle(.white)
             .lineLimit(1)
-            .padding(.horizontal, 5)
-            .frame(minWidth: 16, minHeight: 16)
+            .padding(.horizontal, 4)
+            .frame(minWidth: 15, minHeight: 15)
             .background(Capsule().fill(Color.red))
     }
 }
 
-/// Hover and "current" background shared by every row and grid cell.
-private struct SidebarRowBackground: View {
+/// Background shared by every row and tile: nothing at rest, a faint wash
+/// under the pointer, and a light raised pill for the current item, the
+/// way a browser marks the active tab.
+struct SidebarItemBackground: View {
     let isHovered: Bool
     let isCurrent: Bool
-    var cornerRadius: CGFloat = 8
+    var restingOpacity: Double = 0
+    var cornerRadius: CGFloat = 7
+
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color.primary.opacity(opacity))
+            .fill(fill)
+            .shadow(color: .black.opacity(isCurrent ? 0.1 : 0), radius: 1.5, x: 0, y: 0.5)
     }
 
-    private var opacity: Double {
+    private var fill: Color {
         if isCurrent {
-            return isHovered ? 0.2 : 0.14
+            return Color.white.opacity(colorScheme == .dark ? 0.18 : 0.78)
         }
-        return isHovered ? 0.08 : 0
+        return Color.primary.opacity(isHovered ? restingOpacity + 0.06 : restingOpacity)
     }
 }
 
-private let sidebarRowHeight: CGFloat = 30
-private let sidebarFoldAnimation = Animation.spring(response: 0.28, dampingFraction: 0.86)
+// MARK: - Pinned apps
 
-// MARK: - Favorites
-
-/// Pinned apps as a grid of icons, like the favorites at the top of Arc's
-/// sidebar. A dot marks the ones that are running.
+/// Pinned apps as a grid of small tiles, like the favorites at the top of
+/// Arc's sidebar. A dot marks the ones that are running.
 struct SidebarFavoritesGrid: View {
     let apps: [AppTile]
 
-    private let columns = Array(
-        repeating: GridItem(.flexible(minimum: 40), spacing: 6),
-        count: 4
-    )
-
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 6) {
+        LazyVGrid(columns: SidebarMetrics.tileColumns, spacing: SidebarMetrics.tileSpacing) {
             ForEach(apps, id: \.bundleIdentifier) { app in
-                SidebarFavoriteCell(app: app)
+                SidebarAppTile(app: app)
             }
         }
     }
 }
 
-private struct SidebarFavoriteCell: View {
+/// One app as a tile: icon only, name in the tooltip. Used by the grid of
+/// pinned apps and by every app in the compact rail.
+struct SidebarAppTile: View {
     let app: AppTile
 
     @ObservedObject private var workspace = WorkspaceService.shared
@@ -127,31 +164,40 @@ private struct SidebarFavoriteCell: View {
         workspace.frontmostBundleIdentifier == app.bundleIdentifier
     }
 
+    private var hasBadge: Bool {
+        preferences.showsAppBadges && badges.badge(forBundleIdentifier: app.bundleIdentifier) != nil
+    }
+
     var body: some View {
         Button {
             workspace.activateOrOpen(bundleIdentifier: app.bundleIdentifier)
         } label: {
-            VStack(spacing: 2) {
-                SidebarAppIcon(bundleIdentifier: app.bundleIdentifier, size: 34)
-                    .scaleEffect(isHovered ? 1.06 : 1)
-
-                Circle()
-                    .fill(Color.primary.opacity(isRunning ? 0.55 : 0))
-                    .frame(width: 4, height: 4)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 50)
-            .background(SidebarRowBackground(isHovered: isHovered, isCurrent: isFrontmost, cornerRadius: 11))
-            .overlay(alignment: .topTrailing) {
-                if preferences.showsAppBadges, let badge = badges.badge(forBundleIdentifier: app.bundleIdentifier) {
-                    SidebarBadge(text: badge)
-                        .padding(2)
+            SidebarAppIcon(bundleIdentifier: app.bundleIdentifier, size: SidebarMetrics.tileIconSize)
+                .frame(maxWidth: .infinity)
+                .frame(height: SidebarMetrics.tileHeight)
+                .background(SidebarItemBackground(
+                    isHovered: isHovered,
+                    isCurrent: isFrontmost,
+                    restingOpacity: 0.07,
+                    cornerRadius: SidebarMetrics.tileCornerRadius
+                ))
+                .overlay(alignment: .bottom) {
+                    Capsule()
+                        .fill(Color.primary.opacity(isRunning ? 0.45 : 0))
+                        .frame(width: 8, height: 2)
+                        .padding(.bottom, 2.5)
                 }
-            }
-            .contentShape(Rectangle())
+                .overlay(alignment: .topTrailing) {
+                    if hasBadge {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 7, height: 7)
+                            .padding(4)
+                    }
+                }
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .animation(.spring(response: 0.22, dampingFraction: 0.7), value: isHovered)
         .onHover { isHovered = $0 }
         .help(app.displayName)
         .background {
@@ -163,62 +209,221 @@ private struct SidebarFavoriteCell: View {
     }
 }
 
-// MARK: - App folders
+// MARK: - Pinned folders
 
-/// An app folder as a foldable group: a header row, then one row per app.
-struct SidebarFolderSection: View {
-    let folder: AppFolderTile
+/// A folder pinned to the dock: one of Docky's app folders, or a Finder
+/// folder.
+enum SidebarPinnedFolder: Identifiable, Equatable {
+    case apps(AppFolderTile)
+    case finder(FolderTile)
 
-    @ObservedObject private var sidebar = SidebarPreferences.shared
-    @State private var isHeaderHovered = false
-
-    private var isOpen: Bool {
-        !sidebar.collapsedFolderIdentifiers.contains(folder.identifier)
+    var id: String {
+        switch self {
+        case .apps(let folder): "apps:\(folder.identifier)"
+        case .finder(let folder): "path:\(folder.url.path)"
+        }
     }
+
+    var name: String {
+        switch self {
+        case .apps(let folder): folder.displayName
+        case .finder(let folder): folder.displayName
+        }
+    }
+}
+
+/// A folder as a tile the size of an app tile, showing up to four of the
+/// things inside it the way a phone's home screen draws a folder. That
+/// keeps it apart from an app tile at a glance. Clicking it lists its
+/// contents under the block of tiles.
+///
+/// A Finder folder is read off the main thread. Reading Downloads,
+/// Documents or the Desktop makes macOS ask for access, and that prompt
+/// must never hold up the sidebar itself.
+struct SidebarFolderTileView: View {
+    let folder: SidebarPinnedFolder
+    let isCurrent: Bool
+    let action: () -> Void
+
+    @ObservedObject private var folderAccess = FolderAccessService.shared
+    @State private var previewURLs: [URL] = []
+    @State private var isHovered = false
+
+    private static let previewIconSize: CGFloat = 11
+    private static let previewSpacing: CGFloat = 2
+
+    var body: some View {
+        Button(action: action) {
+            preview
+                .frame(maxWidth: .infinity)
+                .frame(height: SidebarMetrics.tileHeight)
+                .background(SidebarItemBackground(
+                    isHovered: isHovered,
+                    isCurrent: isCurrent,
+                    restingOpacity: 0.07,
+                    cornerRadius: SidebarMetrics.tileCornerRadius
+                ))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(folder.name)
+        .accessibilityLabel(folder.name)
+        .task(id: folderAccess.changeToken) {
+            await loadPreview()
+        }
+    }
+
+    @ViewBuilder
+    private var preview: some View {
+        switch folder {
+        case .apps(let appFolder):
+            if appFolder.apps.isEmpty {
+                emptyPreview
+            } else {
+                miniGrid(count: min(appFolder.apps.count, 4)) { index in
+                    SidebarAppIcon(
+                        bundleIdentifier: appFolder.apps[index].bundleIdentifier,
+                        size: Self.previewIconSize
+                    )
+                }
+            }
+        case .finder:
+            if previewURLs.isEmpty {
+                emptyPreview
+            } else {
+                miniGrid(count: previewURLs.count) { index in
+                    Image(nsImage: IconCacheService.shared.icon(forFileURL: previewURLs[index]))
+                        .resizable()
+                        .interpolation(.high)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: Self.previewIconSize, height: Self.previewIconSize)
+                }
+            }
+        }
+    }
+
+    private var emptyPreview: some View {
+        Image(systemName: "folder.fill")
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(.secondary)
+    }
+
+    /// Up to four icons, two per row, top-left first.
+    private func miniGrid<Icon: View>(count: Int, @ViewBuilder icon: @escaping (Int) -> Icon) -> some View {
+        let side = Self.previewIconSize * 2 + Self.previewSpacing
+        return VStack(alignment: .leading, spacing: Self.previewSpacing) {
+            ForEach(0..<2, id: \.self) { row in
+                HStack(spacing: Self.previewSpacing) {
+                    ForEach(0..<2, id: \.self) { column in
+                        let index = row * 2 + column
+                        if index < count {
+                            icon(index)
+                        } else {
+                            Color.clear
+                                .frame(width: Self.previewIconSize, height: Self.previewIconSize)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(width: side, height: side)
+    }
+
+    private func loadPreview() async {
+        guard case .finder(let finderFolder) = folder else { return }
+        let urls = await FolderAccessService.shared.refreshedSortedContents(
+            of: finderFolder.url,
+            sortMode: finderFolder.sortMode
+        )
+        guard !Task.isCancelled else { return }
+        previewURLs = Array(urls.prefix(4))
+    }
+}
+
+/// What is inside the folder whose tile is selected, listed under the
+/// block of tiles. Each row opens its app or file.
+struct SidebarFolderContents: View {
+    let folder: SidebarPinnedFolder
+    let close: () -> Void
+
+    @ObservedObject private var folderAccess = FolderAccessService.shared
+    @State private var items: [SidebarFolderItem] = []
+    @State private var hasLoaded = false
+
+    /// More than this and the folder is better browsed in Finder.
+    private static let itemLimit = 40
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Button {
-                withAnimation(sidebarFoldAnimation) {
-                    sidebar.toggleFolder(folder.identifier)
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    SidebarChevron(isOpen: isOpen)
+            header
 
-                    Image(systemName: isOpen ? "folder" : "folder.fill")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 20)
-
-                    Text(folder.displayName)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-
-                    Spacer(minLength: 0)
-
-                    Text("\(folder.apps.count)")
-                        .font(.system(size: 11, weight: .medium))
-                        .monospacedDigit()
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.horizontal, 6)
-                .frame(height: sidebarRowHeight)
-                .background(SidebarRowBackground(isHovered: isHeaderHovered, isCurrent: false))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .onHover { isHeaderHovered = $0 }
-
-            if isOpen {
-                ForEach(folder.apps, id: \.bundleIdentifier) { app in
+            switch folder {
+            case .apps(let appFolder):
+                ForEach(appFolder.apps, id: \.bundleIdentifier) { app in
                     SidebarFolderAppRow(app: app)
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
+            case .finder:
+                if items.isEmpty {
+                    Text(hasLoaded ? "Empty" : "Loading…")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
+                        .padding(.leading, SidebarMetrics.rowPadding)
+                        .frame(height: SidebarMetrics.rowHeight)
+                } else {
+                    ForEach(items) { item in
+                        SidebarFolderItemRow(item: item)
+                    }
+                }
             }
         }
-        .clipped()
+        .padding(3)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(0.05))
+        )
+        .task(id: "\(folder.id)-\(folderAccess.changeToken)") {
+            await load()
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 2) {
+            Text(folder.name)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Spacer(minLength: 0)
+
+            if case .finder(let finderFolder) = folder {
+                SidebarRowButton(systemName: "arrow.up.forward", help: "Open in Finder") {
+                    NSWorkspace.shared.open(finderFolder.url)
+                }
+            }
+
+            SidebarRowButton(systemName: "xmark", help: "Close", action: close)
+        }
+        .padding(.leading, SidebarMetrics.rowPadding)
+        .padding(.trailing, 2)
+        .frame(height: 22)
+    }
+
+    private func load() async {
+        guard case .finder(let finderFolder) = folder else { return }
+        let urls = await FolderAccessService.shared.refreshedSortedContents(
+            of: finderFolder.url,
+            sortMode: finderFolder.sortMode
+        )
+        guard !Task.isCancelled else { return }
+
+        var loaded: [SidebarFolderItem] = []
+        for url in urls.prefix(Self.itemLimit) {
+            let name = FileManager.default.displayName(atPath: url.path)
+            loaded.append(SidebarFolderItem(url: url, name: name))
+        }
+        items = loaded
+        hasLoaded = true
     }
 }
 
@@ -236,11 +441,11 @@ private struct SidebarFolderAppRow: View {
         Button {
             workspace.activateOrOpen(bundleIdentifier: app.bundleIdentifier)
         } label: {
-            HStack(spacing: 8) {
-                SidebarAppIcon(bundleIdentifier: app.bundleIdentifier, size: 20)
+            HStack(spacing: SidebarMetrics.rowSpacing) {
+                SidebarAppIcon(bundleIdentifier: app.bundleIdentifier, size: SidebarMetrics.rowIconSize)
 
                 Text(app.displayName)
-                    .font(.system(size: 13))
+                    .font(.system(size: SidebarMetrics.rowFontSize))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
@@ -248,14 +453,13 @@ private struct SidebarFolderAppRow: View {
 
                 if isRunning {
                     Circle()
-                        .fill(Color.primary.opacity(0.5))
+                        .fill(Color.primary.opacity(0.45))
                         .frame(width: 4, height: 4)
                 }
             }
-            .padding(.leading, 26)
-            .padding(.trailing, 8)
-            .frame(height: sidebarRowHeight)
-            .background(SidebarRowBackground(
+            .padding(.horizontal, SidebarMetrics.rowPadding)
+            .frame(height: SidebarMetrics.rowHeight)
+            .background(SidebarItemBackground(
                 isHovered: isHovered,
                 isCurrent: workspace.frontmostBundleIdentifier == app.bundleIdentifier
             ))
@@ -272,10 +476,100 @@ private struct SidebarFolderAppRow: View {
     }
 }
 
+struct SidebarFolderItem: Identifiable, Equatable {
+    let url: URL
+    let name: String
+
+    var id: URL { url }
+}
+
+private struct SidebarFolderItemRow: View {
+    let item: SidebarFolderItem
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button {
+            NSWorkspace.shared.open(item.url)
+        } label: {
+            HStack(spacing: SidebarMetrics.rowSpacing) {
+                Image(nsImage: IconCacheService.shared.icon(forFileURL: item.url))
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: SidebarMetrics.rowIconSize, height: SidebarMetrics.rowIconSize)
+
+                Text(item.name)
+                    .font(.system(size: SidebarMetrics.rowFontSize))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, SidebarMetrics.rowPadding)
+            .frame(height: SidebarMetrics.rowHeight)
+            .background(SidebarItemBackground(isHovered: isHovered, isCurrent: false))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(item.name)
+    }
+}
+
+/// A symbol in a tile the size of the app tiles: the Trash, and the "+"
+/// of the compact rail.
+struct SidebarSymbolTile: View {
+    let systemName: String
+    let help: String
+    var restingOpacity: Double = 0.07
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .frame(height: SidebarMetrics.tileHeight)
+                .background(SidebarItemBackground(
+                    isHovered: isHovered,
+                    isCurrent: false,
+                    restingOpacity: restingOpacity,
+                    cornerRadius: SidebarMetrics.tileCornerRadius
+                ))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
+/// The Trash as a tile, opened through Finder like the dock's Trash tile.
+struct SidebarTrashTile: View {
+    @ObservedObject private var trash = TrashService.shared
+
+    var body: some View {
+        SidebarSymbolTile(
+            systemName: trash.isEmpty ? "trash" : "trash.fill",
+            help: String(localized: "Trash")
+        ) {
+            Task {
+                _ = await AppleScriptService.shared.openTrash()
+            }
+        }
+    }
+}
+
 // MARK: - Open apps
 
 /// One open app, the sidebar's "tab". Clicking the row brings the app
-/// forward; the chevron unfolds its windows underneath.
+/// forward; the chevron on the right unfolds its windows underneath.
 struct SidebarOpenAppSection: View {
     let app: RunningApp
     let windows: [AppWindow]
@@ -313,14 +607,12 @@ struct SidebarOpenAppSection: View {
     }
 
     private var row: some View {
-        HStack(spacing: 6) {
-            foldButton
-
-            SidebarAppIcon(bundleIdentifier: app.bundleIdentifier, size: 20)
+        HStack(spacing: SidebarMetrics.rowSpacing) {
+            SidebarAppIcon(bundleIdentifier: app.bundleIdentifier, size: SidebarMetrics.rowIconSize)
                 .opacity(app.isHidden ? 0.5 : 1)
 
             Text(app.localizedName)
-                .font(.system(size: 13, weight: isFrontmost ? .semibold : .regular))
+                .font(.system(size: SidebarMetrics.rowFontSize, weight: isFrontmost ? .medium : .regular))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
 
@@ -328,10 +620,10 @@ struct SidebarOpenAppSection: View {
 
             trailing
         }
-        .padding(.leading, 6)
-        .padding(.trailing, 6)
-        .frame(height: sidebarRowHeight)
-        .background(SidebarRowBackground(isHovered: isHovered, isCurrent: isFrontmost))
+        .padding(.leading, SidebarMetrics.rowPadding)
+        .padding(.trailing, 5)
+        .frame(height: SidebarMetrics.rowHeight)
+        .background(SidebarItemBackground(isHovered: isHovered, isCurrent: isFrontmost))
         .contentShape(Rectangle())
         .onTapGesture {
             workspace.activateOrOpen(bundleIdentifier: app.bundleIdentifier)
@@ -345,45 +637,43 @@ struct SidebarOpenAppSection: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
-    }
-
-    /// The chevron, or an empty slot of the same width for an app without
-    /// windows so the icons stay aligned.
-    @ViewBuilder
-    private var foldButton: some View {
-        if windows.isEmpty {
-            Color.clear.frame(width: 14, height: sidebarRowHeight)
-        } else {
-            Button {
-                withAnimation(sidebarFoldAnimation) {
-                    sidebar.toggleExpansion(ofApp: app.bundleIdentifier)
-                }
-            } label: {
-                SidebarChevron(isOpen: isOpen)
-                    .frame(height: sidebarRowHeight)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help(isOpen ? "Hide windows" : "Show windows")
+        .accessibilityAction(.default) {
+            workspace.activateOrOpen(bundleIdentifier: app.bundleIdentifier)
+        }
+        .accessibilityAction(named: isOpen ? "Hide windows" : "Show windows") {
+            sidebar.toggleExpansion(ofApp: app.bundleIdentifier)
         }
     }
 
-    /// Quit button while hovering, otherwise the unread badge or the
-    /// window count.
+    /// Right side of the row: the quit button under the pointer, otherwise
+    /// the unread badge; then the chevron when the app has windows to show.
     @ViewBuilder
     private var trailing: some View {
-        if isHovered {
-            SidebarRowCloseButton(help: "Quit \(app.localizedName)") {
-                workspace.quit(bundleIdentifier: app.bundleIdentifier)
+        HStack(spacing: 2) {
+            if isHovered {
+                SidebarRowButton(systemName: "xmark", help: "Quit \(app.localizedName)") {
+                    workspace.quit(bundleIdentifier: app.bundleIdentifier)
+                }
+            } else if preferences.showsAppBadges, let badge = badges.badge(forBundleIdentifier: app.bundleIdentifier) {
+                SidebarBadge(text: badge)
             }
-        } else if preferences.showsAppBadges, let badge = badges.badge(forBundleIdentifier: app.bundleIdentifier) {
-            SidebarBadge(text: badge)
-        } else if windows.count > 1 {
-            Text("\(windows.count)")
-                .font(.system(size: 11, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(.tertiary)
-                .padding(.trailing, 4)
+
+            if !windows.isEmpty {
+                Button {
+                    withAnimation(SidebarMetrics.foldAnimation) {
+                        sidebar.toggleExpansion(ofApp: app.bundleIdentifier)
+                    }
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(isOpen ? "Hide windows" : "Show windows")
+            }
         }
     }
 }
@@ -401,29 +691,29 @@ private struct SidebarWindowRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: window.isMinimized ? "minus.rectangle" : "macwindow")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.tertiary)
-                .frame(width: 16)
-
             Text(title)
                 .font(.system(size: 12))
-                .foregroundStyle(window.isMinimized ? .secondary : .primary)
+                .foregroundStyle(window.isMinimized ? .tertiary : .secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
             Spacer(minLength: 0)
 
             if isHovered {
-                SidebarRowCloseButton(help: "Close window") {
+                SidebarRowButton(systemName: "xmark", help: "Close window") {
                     _ = WorkspaceService.shared.close(window: window)
                 }
+            } else if window.isMinimized {
+                Image(systemName: "minus")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 18)
             }
         }
-        .padding(.leading, 30)
-        .padding(.trailing, 6)
-        .frame(height: 26)
-        .background(SidebarRowBackground(isHovered: isHovered, isCurrent: false, cornerRadius: 7))
+        .padding(.leading, SidebarMetrics.nestedIndent)
+        .padding(.trailing, 5)
+        .frame(height: 24)
+        .background(SidebarItemBackground(isHovered: isHovered, isCurrent: false, cornerRadius: 6))
         .contentShape(Rectangle())
         .onTapGesture {
             _ = WorkspaceService.shared.focus(window: window)
@@ -432,24 +722,90 @@ private struct SidebarWindowRow: View {
         .help(title)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction(.default) {
+            _ = WorkspaceService.shared.focus(window: window)
+        }
+    }
+}
+
+// MARK: - Plain rows
+
+/// A row that runs an action: "New Window", the Trash. `isQuiet` greys it
+/// the way a browser greys "New Tab" under the open tabs.
+struct SidebarActionRow: View {
+    let systemName: String
+    let title: String
+    var isQuiet = false
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: SidebarMetrics.rowSpacing) {
+                Image(systemName: systemName)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: SidebarMetrics.rowIconSize)
+
+                Text(title)
+                    .font(.system(size: SidebarMetrics.rowFontSize))
+                    .foregroundStyle(isQuiet ? .secondary : .primary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, SidebarMetrics.rowPadding)
+            .frame(height: SidebarMetrics.rowHeight)
+            .background(SidebarItemBackground(isHovered: isHovered, isCurrent: false))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+    }
+}
+
+/// A short, clickable note inside the list, for a missing permission.
+struct SidebarHintRow: View {
+    let systemName: String
+    let text: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: SidebarMetrics.rowSpacing) {
+                Image(systemName: systemName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: SidebarMetrics.rowIconSize)
+                    .padding(.top, 1)
+
+                Text(text)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, SidebarMetrics.rowPadding)
+            .padding(.vertical, 6)
+            .background(SidebarItemBackground(isHovered: isHovered, isCurrent: false, restingOpacity: 0.05))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
     }
 }
 
 // MARK: - Small controls
 
-private struct SidebarChevron: View {
-    let isOpen: Bool
-
-    var body: some View {
-        Image(systemName: "chevron.right")
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(.tertiary)
-            .rotationEffect(.degrees(isOpen ? 90 : 0))
-            .frame(width: 14)
-    }
-}
-
-private struct SidebarRowCloseButton: View {
+/// Small square button at the right end of a row: close, quit, open in
+/// Finder.
+struct SidebarRowButton: View {
+    let systemName: String
     let help: String
     let action: () -> Void
 
@@ -457,13 +813,39 @@ private struct SidebarRowCloseButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "xmark")
+            Image(systemName: systemName)
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(isHovered ? .primary : .secondary)
                 .frame(width: 18, height: 18)
                 .background(
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(Color.primary.opacity(isHovered ? 0.14 : 0))
+                        .fill(Color.primary.opacity(isHovered ? 0.12 : 0))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(help)
+    }
+}
+
+/// Header button: the rail toggle, and the "+" of the compact rail.
+struct SidebarIconButton: View {
+    let systemName: String
+    let help: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.primary.opacity(isHovered ? 0.1 : 0))
                 )
                 .contentShape(Rectangle())
         }

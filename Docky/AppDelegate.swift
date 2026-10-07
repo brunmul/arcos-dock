@@ -346,6 +346,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             return AppUpdateService.shared.canCheckForUpdates
         }
 
+        if menuItem.action == #selector(toggleSidebarMode(_:)) {
+            menuItem.state = SidebarPreferences.shared.isEnabled ? .on : .off
+            return true
+        }
+
+        if menuItem.action == #selector(toggleSidebarCompact(_:)) {
+            menuItem.state = SidebarPreferences.shared.isCompact ? .on : .off
+            return SidebarPreferences.shared.isEnabled
+        }
+
+        if menuItem.action == #selector(toggleSidebarPinned(_:)) {
+            menuItem.state = SidebarPreferences.shared.isPinned ? .on : .off
+            return SidebarPreferences.shared.isEnabled
+        }
+
         return true
     }
 
@@ -432,9 +447,55 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             appMenu?.insertItem(item, at: 1)
         }
 
+        if let appMenu, appMenu.item(withTitle: Self.sidebarMenuTitle) == nil {
+            let sidebarItem = NSMenuItem(
+                title: Self.sidebarMenuTitle,
+                action: #selector(toggleSidebarMode(_:)),
+                keyEquivalent: ""
+            )
+            sidebarItem.target = self
+
+            let pinItem = NSMenuItem(
+                title: Self.sidebarPinMenuTitle,
+                action: #selector(toggleSidebarPinned(_:)),
+                keyEquivalent: ""
+            )
+            pinItem.target = self
+
+            let compactItem = NSMenuItem(
+                title: Self.sidebarCompactMenuTitle,
+                action: #selector(toggleSidebarCompact(_:)),
+                keyEquivalent: ""
+            )
+            compactItem.target = self
+
+            // Right under Settings…, which sits after "Check for Updates…".
+            let settingsIndex = appMenu.indexOfItem(withTitle: "Settings…")
+            let insertionIndex = settingsIndex >= 0 ? settingsIndex + 1 : appMenu.numberOfItems
+            appMenu.insertItem(pinItem, at: insertionIndex)
+            appMenu.insertItem(compactItem, at: insertionIndex)
+            appMenu.insertItem(sidebarItem, at: insertionIndex)
+        }
+
         #if DEBUG
         installDebugStatusItem()
         #endif
+    }
+
+    private static let sidebarMenuTitle = "Show as Sidebar"
+    private static let sidebarPinMenuTitle = "Keep Sidebar Visible"
+    private static let sidebarCompactMenuTitle = "Compact Sidebar"
+
+    @objc private func toggleSidebarCompact(_ sender: Any?) {
+        SidebarPreferences.shared.isCompact.toggle()
+    }
+
+    @objc private func toggleSidebarMode(_ sender: Any?) {
+        SidebarWindowController.shared.setSidebarMode(!SidebarPreferences.shared.isEnabled)
+    }
+
+    @objc private func toggleSidebarPinned(_ sender: Any?) {
+        SidebarPreferences.shared.isPinned.toggle()
     }
 
     #if DEBUG

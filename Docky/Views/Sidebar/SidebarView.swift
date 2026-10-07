@@ -2,15 +2,21 @@
 //  SidebarView.swift
 //  Docky
 //
-//  Content of the sidebar, top to bottom:
+//  Content of the sidebar. It follows the layout of Arc's sidebar, top to
+//  bottom:
 //
-//    header      pin / unpin, and a menu (settings, back to the dock strip)
-//    favorites   the pinned apps, as a grid of icons
-//    list        app folders, then every open app; an app row unfolds
-//                into its windows
-//    widgets     the dock's widgets at full width; each unfolds in place
-//                into the detailed view the dock shows on hover
-//    footer      pinned folders and the Trash
+//    header      the full / compact toggle, and a menu (auto-hide,
+//                settings, back to the dock strip)
+//    pinned      two small blocks of tiles: the pinned apps, then the
+//                pinned folders and the Trash. A folder's tile lists its
+//                contents underneath
+//    open        every open app; a row unfolds into the app's windows.
+//                "New Window" closes the list and opens the app search
+//    widgets     the dock's widgets as compact cards; one at a time
+//                unfolds in place into its detailed view
+//
+//  Compact, the same content becomes a rail of icons, like the collapsed
+//  vertical tabs of Chrome or Brave.
 //
 //  Everything is read from the stores the dock strip already uses
 //  (`TileStore`, `WorkspaceService`, `WindowRegistry`), so both
@@ -25,81 +31,143 @@ struct SidebarView: View {
     @ObservedObject private var workspace = WorkspaceService.shared
     @ObservedObject private var windowRegistry = WindowRegistry.shared
     @ObservedObject private var sidebar = SidebarPreferences.shared
+    @ObservedObject private var permissions = PermissionsService.shared
     @Bindable private var preferences = DockyPreferences.shared
 
-    private static let cornerRadius: CGFloat = 18
-    private static let horizontalPadding: CGFloat = 10
+    private static let cornerRadius: CGFloat = 16
+    private static let horizontalPadding: CGFloat = 8
 
     var body: some View {
-        VStack(spacing: 0) {
-            SidebarHeader()
-                .padding(.horizontal, Self.horizontalPadding)
-                .padding(.top, 8)
-
-            if !favoriteApps.isEmpty {
-                SidebarFavoritesGrid(apps: favoriteApps)
-                    .padding(.horizontal, Self.horizontalPadding)
-                    .padding(.top, 6)
+        Group {
+            if sidebar.isCompact {
+                SidebarRail(
+                    pinnedApps: pinnedApps,
+                    pinnedFolders: pinnedFolders,
+                    showsTrash: showsTrash,
+                    otherOpenApps: unpinnedOpenApps,
+                    widgets: widgets
+                )
+            } else {
+                fullSidebar
             }
-
-            sectionDivider
-
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(appFolders, id: \.identifier) { folder in
-                        SidebarFolderSection(folder: folder)
-                    }
-
-                    if !appFolders.isEmpty, !openApps.isEmpty {
-                        SidebarSectionLabel(title: "Open")
-                            .padding(.top, 8)
-                    }
-
-                    ForEach(openApps) { app in
-                        SidebarOpenAppSection(
-                            app: app,
-                            windows: windowRegistry.windows(forBundleIdentifier: app.bundleIdentifier)
-                        )
-                    }
-                }
-                .padding(.horizontal, Self.horizontalPadding)
-                .padding(.vertical, 4)
-            }
-            .frame(minHeight: 80)
-
-            if !widgets.isEmpty {
-                sectionDivider
-
-                VStack(spacing: 6) {
-                    ForEach(widgets, id: \.identifier) { widget in
-                        SidebarWidgetRow(widget: widget)
-                    }
-                }
-                .padding(.horizontal, Self.horizontalPadding)
-            }
-
-            SidebarFooter(folders: pinnedFolders, showsTrash: showsTrash)
-                .padding(.horizontal, Self.horizontalPadding)
-                .padding(.top, 8)
-                .padding(.bottom, 10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .dockyWidgetGlass(cornerRadius: Self.cornerRadius)
         .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
     }
 
-    private var sectionDivider: some View {
-        Rectangle()
-            .fill(.quaternary)
-            .frame(height: 1)
-            .padding(.horizontal, Self.horizontalPadding + 2)
-            .padding(.vertical, 8)
+    private var fullSidebar: some View {
+        VStack(spacing: 0) {
+            SidebarHeader()
+                .padding(.horizontal, Self.horizontalPadding)
+                .padding(.top, 8)
+                .padding(.bottom, 6)
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 1) {
+                    pinnedSection
+
+                    SidebarDivider()
+                        .padding(.vertical, 6)
+
+                    openSection
+                }
+                .padding(.horizontal, Self.horizontalPadding)
+                .padding(.bottom, 6)
+            }
+            .frame(minHeight: 80)
+
+            if !widgets.isEmpty {
+                SidebarDivider()
+                    .padding(.horizontal, Self.horizontalPadding)
+                    .padding(.bottom, 6)
+
+                VStack(spacing: 4) {
+                    ForEach(widgets, id: \.identifier) { widget in
+                        SidebarWidgetCard(widget: widget)
+                    }
+                }
+                .padding(.horizontal, Self.horizontalPadding)
+            }
+        }
+        .padding(.bottom, 8)
+    }
+
+    /// Everything pinned to the dock, as two small blocks of tiles: the
+    /// apps, then the folders and the Trash. The folder whose tile is
+    /// selected lists its contents underneath.
+    @ViewBuilder
+    private var pinnedSection: some View {
+        if !pinnedApps.isEmpty {
+            SidebarFavoritesGrid(apps: pinnedApps)
+        }
+
+        if !pinnedFolders.isEmpty || showsTrash {
+            LazyVGrid(columns: SidebarMetrics.tileColumns, spacing: SidebarMetrics.tileSpacing) {
+                ForEach(pinnedFolders) { folder in
+                    SidebarFolderTileView(
+                        folder: folder,
+                        isCurrent: sidebar.openFolderIdentifier == folder.id
+                    ) {
+                        withAnimation(SidebarMetrics.foldAnimation) {
+                            sidebar.toggleFolder(folder.id)
+                        }
+                    }
+                }
+
+                if showsTrash {
+                    SidebarTrashTile()
+                }
+            }
+            .padding(.top, pinnedApps.isEmpty ? 0 : 7)
+        }
+
+        if let openFolder {
+            SidebarFolderContents(folder: openFolder) {
+                withAnimation(SidebarMetrics.foldAnimation) {
+                    sidebar.openFolderIdentifier = nil
+                }
+            }
+            .padding(.top, 6)
+            .transition(.opacity)
+        }
+    }
+
+    private var openFolder: SidebarPinnedFolder? {
+        guard let identifier = sidebar.openFolderIdentifier else { return nil }
+        return pinnedFolders.first { $0.id == identifier }
+    }
+
+    /// The open apps, then "New Window" the way a browser ends its tabs
+    /// with "New Tab".
+    @ViewBuilder
+    private var openSection: some View {
+        ForEach(openApps) { app in
+            SidebarOpenAppSection(
+                app: app,
+                windows: windowRegistry.windows(forBundleIdentifier: app.bundleIdentifier)
+            )
+        }
+
+        SidebarActionRow(systemName: "plus", title: "New Window", isQuiet: true) {
+            sidebarOpenAppSearch()
+        }
+
+        if permissions.accessibility != .granted {
+            SidebarHintRow(
+                systemName: "macwindow.on.rectangle",
+                text: "Allow Accessibility to keep windows out from under the sidebar and to unfold apps into their windows"
+            ) {
+                _ = PermissionsService.shared.requestAccessibilityPermission(prompt: true)
+            }
+            .padding(.top, 6)
+        }
     }
 
     // MARK: - Data
 
     /// Apps pinned to the dock, in dock order.
-    private var favoriteApps: [AppTile] {
+    private var pinnedApps: [AppTile] {
         var apps: [AppTile] = []
         for tile in tileStore.tiles where tile.id.hasPrefix("pinned:") {
             if case .app(let app) = tile.content, !app.bundleIdentifier.isEmpty {
@@ -109,21 +177,18 @@ struct SidebarView: View {
         return apps
     }
 
-    private var appFolders: [AppFolderTile] {
-        var folders: [AppFolderTile] = []
-        for tile in tileStore.tiles {
-            if case .appFolder(let folder) = tile.content {
-                folders.append(folder)
-            }
-        }
-        return folders
-    }
-
     /// Every running app, oldest first, minus the ones hidden from Docky.
     private var openApps: [RunningApp] {
         workspace.runningApps.filter { app in
             !preferences.isAppHiddenInDocky(bundleIdentifier: app.bundleIdentifier)
         }
+    }
+
+    /// Open apps that are not pinned. The compact rail lists these under
+    /// the pinned ones, so no icon shows up twice.
+    private var unpinnedOpenApps: [RunningApp] {
+        let pinned = Set(pinnedApps.map(\.bundleIdentifier))
+        return openApps.filter { !pinned.contains($0.bundleIdentifier) }
     }
 
     private var widgets: [WidgetTile] {
@@ -136,11 +201,17 @@ struct SidebarView: View {
         return result
     }
 
-    private var pinnedFolders: [FolderTile] {
-        var folders: [FolderTile] = []
+    /// Docky's app folders and the Finder folders, in dock order.
+    private var pinnedFolders: [SidebarPinnedFolder] {
+        var folders: [SidebarPinnedFolder] = []
         for tile in tileStore.tiles {
-            if case .folder(let folder) = tile.content {
-                folders.append(folder)
+            switch tile.content {
+            case .appFolder(let folder):
+                folders.append(.apps(folder))
+            case .folder(let folder):
+                folders.append(.finder(folder))
+            default:
+                break
             }
         }
         return folders
@@ -156,23 +227,25 @@ struct SidebarView: View {
     }
 }
 
-// MARK: - Header and footer
+// MARK: - Header
 
 private struct SidebarHeader: View {
     @ObservedObject private var sidebar = SidebarPreferences.shared
 
     var body: some View {
         HStack(spacing: 6) {
-            SidebarIconButton(
-                systemName: sidebar.isPinned ? "sidebar.left" : "sidebar.squares.left",
-                help: sidebar.isPinned ? "Hide the sidebar until the pointer reaches the left edge" : "Keep the sidebar on screen"
-            ) {
-                sidebar.isPinned.toggle()
+            SidebarIconButton(systemName: "sidebar.left", help: "Show icons only") {
+                sidebar.isCompact = true
             }
 
             Spacer(minLength: 0)
 
             Menu {
+                Toggle("Hide Automatically", isOn: Binding(
+                    get: { !sidebar.isPinned },
+                    set: { sidebar.isPinned = !$0 }
+                ))
+                Divider()
                 Button("Settings…") {
                     (NSApp.delegate as? AppDelegate)?.showSettingsWindow(nil)
                 }
@@ -185,9 +258,9 @@ private struct SidebarHeader: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
-                    .frame(width: 26, height: 24)
+                    .frame(width: 28, height: 24)
                     .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
@@ -199,191 +272,204 @@ private struct SidebarHeader: View {
     }
 }
 
-private struct SidebarFooter: View {
-    let folders: [FolderTile]
-    let showsTrash: Bool
-
-    @ObservedObject private var trash = TrashService.shared
-
+private struct SidebarDivider: View {
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(folders, id: \.url) { folder in
-                SidebarFolderChip(folder: folder)
-            }
-
-            Spacer(minLength: 0)
-
-            if showsTrash {
-                Button {
-                    let trashURL = FileManager.default.homeDirectoryForCurrentUser
-                        .appendingPathComponent(".Trash", isDirectory: true)
-                    NSWorkspace.shared.open(trashURL)
-                } label: {
-                    Image(nsImage: NSImage(named: trash.isEmpty ? "NSTrashEmpty" : "NSTrashFull") ?? NSImage())
-                        .resizable()
-                        .interpolation(.high)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 24, height: 24)
-                }
-                .buttonStyle(.plain)
-                .help("Trash")
-            }
-        }
-        .frame(height: 26)
-    }
-}
-
-/// A pinned folder, opened in Finder on click. Drawn with a symbol and
-/// the folder's name rather than its real icon: asking the system for the
-/// icon of Downloads or Documents makes macOS prompt for access to that
-/// folder, and the prompt would hold up the whole sidebar at launch.
-private struct SidebarFolderChip: View {
-    let folder: FolderTile
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button {
-            NSWorkspace.shared.open(folder.url)
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "folder.fill")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-
-                Text(folder.displayName)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            .padding(.horizontal, 8)
-            .frame(height: 24)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color.primary.opacity(isHovered ? 0.14 : 0.07))
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .help("Open \(folder.displayName) in Finder")
+        Rectangle()
+            .fill(Color.primary.opacity(0.1))
+            .frame(height: 1)
+            .padding(.horizontal, 4)
     }
 }
 
 // MARK: - Widgets
 
-/// One widget at full sidebar width. The chevron unfolds it in place into
-/// the detailed view the dock strip shows in its hover panel.
-private struct SidebarWidgetRow: View {
+/// One widget as a compact card. A click unfolds it in place into the
+/// detailed view the dock strip shows on hover; the bar under the detail
+/// folds it back. Only one is unfolded at a time.
+private struct SidebarWidgetCard: View {
     let widget: WidgetTile
 
     @ObservedObject private var sidebar = SidebarPreferences.shared
+    @State private var isHandleHovered = false
+
+    private static let cornerRadius: CGFloat = 10
+    private static let collapsedHeight: CGFloat = 40
 
     private var isExpanded: Bool {
-        sidebar.expandedWidgetIdentifiers.contains(widget.identifier)
-    }
-
-    private var canExpand: Bool {
-        widget.kind.isExpandable
+        widget.kind.isExpandable && sidebar.expandedWidgetIdentifiers.contains(widget.identifier)
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 2) {
+        VStack(spacing: 2) {
             WidgetTileView(
                 tile: widget,
-                cornerRadius: 12,
-                renderedSpan: .four,
+                cornerRadius: Self.cornerRadius,
+                renderedSpan: .three,
                 isWithinStack: false,
                 isExpanded: isExpanded,
                 isExpandedPreviewOpen: isExpanded
             )
-            .frame(height: isExpanded ? expandedHeight : collapsedHeight)
+            .frame(height: isExpanded ? expandedHeight : Self.collapsedHeight)
             .onTapGesture {
-                // Folded, the whole widget is the target. Unfolded, only
-                // the chevron folds it back, so a click inside the detail
+                // Folded, the whole card is the target. Unfolded, only the
+                // bar below folds it back, so a click inside the detail
                 // view never closes it by accident.
-                guard canExpand, !isExpanded else { return }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
-                    sidebar.toggleWidget(widget.identifier)
-                }
+                guard widget.kind.isExpandable, !isExpanded else { return }
+                toggle()
             }
+            .help(widget.kind.isExpandable && !isExpanded ? "Click for details" : "")
 
-            if canExpand {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
-                        sidebar.toggleWidget(widget.identifier)
-                    }
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .bold))
+            if isExpanded {
+                Button(action: toggle) {
+                    Image(systemName: "chevron.compact.up")
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                        .frame(width: 14, height: collapsedHeight)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(Color.primary.opacity(isHandleHovered ? 0.08 : 0))
+                        )
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(isExpanded ? "Show less" : "Show more")
+                .onHover { isHandleHovered = $0 }
+                .help("Show less")
             }
         }
     }
 
-    private var collapsedHeight: CGFloat {
-        52
+    private func toggle() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+            sidebar.toggleWidget(widget.identifier)
+        }
     }
 
     private var expandedHeight: CGFloat {
         switch widget.kind {
         case .calendar:
-            280
+            250
         case .nowPlaying:
-            150
+            136
         case .systemStatus:
-            210
+            184
         default:
-            230
+            200
         }
     }
 }
 
-// MARK: - Small shared pieces
+// MARK: - Compact rail
 
-struct SidebarSectionLabel: View {
-    let title: String
+/// The sidebar reduced to a column of icons. Pinned apps, pinned folders,
+/// the other open apps, "+", and the widgets as small squares. Clicking a
+/// folder or a widget opens the full sidebar on it.
+private struct SidebarRail: View {
+    let pinnedApps: [AppTile]
+    let pinnedFolders: [SidebarPinnedFolder]
+    let showsTrash: Bool
+    let otherOpenApps: [RunningApp]
+    let widgets: [WidgetTile]
+
+    @ObservedObject private var sidebar = SidebarPreferences.shared
+
+    private static let itemWidth: CGFloat = 40
 
     var body: some View {
-        Text(title)
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(.tertiary)
-            .tracking(0.6)
-            .textCase(.uppercase)
-            .padding(.horizontal, 6)
-            .padding(.bottom, 2)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(spacing: 0) {
+            SidebarIconButton(systemName: "sidebar.left", help: "Show the full sidebar") {
+                sidebar.isCompact = false
+            }
+            .padding(.top, 8)
+            .padding(.bottom, 6)
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 4) {
+                    ForEach(pinnedApps, id: \.bundleIdentifier) { app in
+                        SidebarAppTile(app: app)
+                    }
+
+                    if hasFolders {
+                        railDivider
+
+                        ForEach(pinnedFolders) { folder in
+                            SidebarFolderTileView(folder: folder, isCurrent: false) {
+                                sidebar.openFolderIdentifier = folder.id
+                                sidebar.isCompact = false
+                            }
+                        }
+
+                        if showsTrash {
+                            SidebarTrashTile()
+                        }
+                    }
+
+                    railDivider
+
+                    ForEach(otherOpenApps) { app in
+                        SidebarAppTile(app: AppTile(
+                            bundleIdentifier: app.bundleIdentifier,
+                            displayName: app.localizedName
+                        ))
+                    }
+
+                    SidebarSymbolTile(systemName: "plus", help: "New Window", restingOpacity: 0) {
+                        sidebarOpenAppSearch()
+                    }
+                }
+                .frame(width: Self.itemWidth)
+                .padding(.bottom, 6)
+            }
+            .frame(minHeight: 60)
+
+            if !widgets.isEmpty {
+                railDivider
+                    .padding(.bottom, 6)
+
+                VStack(spacing: 4) {
+                    ForEach(widgets, id: \.identifier) { widget in
+                        SidebarRailWidget(widget: widget)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, 8)
+    }
+
+    private var hasFolders: Bool {
+        !pinnedFolders.isEmpty || showsTrash
+    }
+
+    private var railDivider: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.1))
+            .frame(width: 24, height: 1)
+            .padding(.vertical, 3)
     }
 }
 
-struct SidebarIconButton: View {
-    let systemName: String
-    let help: String
-    let action: () -> Void
+/// A widget at the size of a single dock tile. Its own controls keep
+/// working; a click anywhere else opens the full sidebar on its details.
+private struct SidebarRailWidget: View {
+    let widget: WidgetTile
 
-    @State private var isHovered = false
+    @ObservedObject private var sidebar = SidebarPreferences.shared
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 26, height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.primary.opacity(isHovered ? 0.1 : 0))
-                )
-                .contentShape(Rectangle())
+        WidgetTileView(
+            tile: widget,
+            cornerRadius: 10,
+            renderedSpan: .one,
+            isWithinStack: false
+        )
+        .frame(width: 40, height: 40)
+        .onTapGesture {
+            if widget.kind.isExpandable {
+                sidebar.expandedWidgetIdentifiers = [widget.identifier]
+            }
+            sidebar.isCompact = false
         }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .help(help)
+        .help(widget.title)
     }
 }

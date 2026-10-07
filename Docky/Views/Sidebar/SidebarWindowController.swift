@@ -86,10 +86,15 @@ final class SidebarWindowController: NSObject {
         let frame = CGRect(
             x: visible.minX,
             y: visible.minY,
-            width: SidebarPreferences.panelWidth + SidebarPreferences.screenMargin * 2,
+            width: preferences.panelWidth + SidebarPreferences.screenMargin * 2,
             height: visible.height
         )
         return (screen, frame)
+    }
+
+    /// The display the sidebar lives on, whether or not it is showing.
+    var screen: NSScreen? {
+        targetScreen()
     }
 
     // MARK: - Panel
@@ -112,7 +117,11 @@ final class SidebarWindowController: NSObject {
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = DockyPreferences.shared.windowSpaceBehavior
             .collectionBehavior(includesFullScreenAuxiliary: false)
-        panel.contentView = SidebarHostingView(rootView: SidebarView())
+        let hostingView = SidebarHostingView(rootView: SidebarView())
+        // The panel's frame is ours to decide. Left on, the hosting view
+        // widens the window to whatever its content would ideally take.
+        hostingView.sizingOptions = []
+        panel.contentView = hostingView
         return panel
     }
 
@@ -127,14 +136,23 @@ final class SidebarWindowController: NSObject {
         return CGRect(
             x: visible.minX + margin,
             y: visible.minY + margin,
-            width: SidebarPreferences.panelWidth,
+            width: preferences.panelWidth,
             height: max(0, visible.height - margin * 2)
         )
     }
 
-    private func applyFrame() {
+    private func applyFrame(animated: Bool = false) {
         guard let panel, let frame = panelFrame() else { return }
-        panel.setFrame(frame, display: true)
+        guard animated, panel.isVisible else {
+            panel.setFrame(frame, display: true)
+            return
+        }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = animationDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().setFrame(frame, display: true)
+        }
     }
 
     private func observeInputsIfNeeded() {
@@ -144,6 +162,17 @@ final class SidebarWindowController: NSObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.applyFrame()
+            }
+            .store(in: &cancellables)
+
+        // Full sidebar <-> icon rail. `receive(on:)` matters here too:
+        // `@Published` fires before the value is stored.
+        preferences.$isCompact
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.applyFrame(animated: true)
             }
             .store(in: &cancellables)
 

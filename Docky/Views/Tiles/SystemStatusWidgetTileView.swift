@@ -142,8 +142,19 @@ struct SystemStatusWidgetTileView: View {
 
                 Spacer(minLength: 0)
 
-                expandedRate(symbol: "arrow.down", text: rateText(snapshot.receivedBytesPerSecond), tint: .systemBlue, base: base)
-                expandedRate(symbol: "arrow.up", text: rateText(snapshot.sentBytesPerSecond), tint: .systemOrange, base: base)
+                // Full rates where they fit, the short form ("13M") in a
+                // narrow panel such as the sidebar's.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: base * 0.5) {
+                        expandedRate(symbol: "arrow.down", text: rateText(snapshot.receivedBytesPerSecond), tint: .systemBlue, base: base)
+                        expandedRate(symbol: "arrow.up", text: rateText(snapshot.sentBytesPerSecond), tint: .systemOrange, base: base)
+                    }
+
+                    HStack(spacing: base * 0.5) {
+                        expandedRate(symbol: "arrow.down", text: snapshot.compactReceivedRateText, tint: .systemBlue, base: base)
+                        expandedRate(symbol: "arrow.up", text: snapshot.compactSentRateText, tint: .systemOrange, base: base)
+                    }
+                }
             }
         }
         .padding(base * 1.3)
