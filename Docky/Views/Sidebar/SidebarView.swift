@@ -5,8 +5,9 @@
 //  Content of the sidebar. It follows the layout of Arc's sidebar, top to
 //  bottom:
 //
-//    header      the full / compact toggle, and a menu (auto-hide,
-//                settings, back to the dock strip)
+//    header      the Apple mark, the full / compact toggle, and a menu
+//                (auto-hide, settings, back to the dock strip); then the
+//                greeting, the date and the time (`SidebarWelcome.swift`)
 //    pinned      two small blocks of tiles: the pinned apps, then the
 //                pinned folders and the Trash. A folder's tile lists its
 //                contents underneath
@@ -60,7 +61,11 @@ struct SidebarView: View {
             SidebarHeader()
                 .padding(.horizontal, Self.horizontalPadding)
                 .padding(.top, 8)
-                .padding(.bottom, 6)
+
+            SidebarWelcome()
+                .padding(.horizontal, Self.horizontalPadding + 4)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -228,20 +233,12 @@ struct SidebarView: View {
 
 // MARK: - Chrome
 
-/// The sidebar's surface: opaque, in the window background color with the
-/// dock's own tint over it, so it sits a shade apart from the windows next
-/// to it and follows the tint chosen in Docky's appearance settings.
+/// The sidebar's surface: opaque warm paper (see `SidebarPalette`).
 /// Opaque on purpose: the sidebar is meant to read as part of the screen's
 /// frame, not as glass floating over the desktop.
 struct SidebarChrome: View {
-    @Bindable private var preferences = DockyPreferences.shared
-
     var body: some View {
-        ZStack {
-            Color(nsColor: .windowBackgroundColor)
-            Color(nsColor: preferences.effectiveWindowTintColor)
-                .opacity(preferences.effectiveWindowTintOpacity)
-        }
+        SidebarPalette.surface
     }
 }
 
@@ -343,12 +340,14 @@ private struct SidebarHeader: View {
     @ObservedObject private var sidebar = SidebarPreferences.shared
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 2) {
+            SidebarAppleMark()
+
+            Spacer(minLength: 0)
+
             SidebarIconButton(systemName: "sidebar.left", help: "Show icons only") {
                 sidebar.isCompact = true
             }
-
-            Spacer(minLength: 0)
 
             Menu {
                 Toggle("Hide Automatically", isOn: Binding(
@@ -384,9 +383,7 @@ private struct SidebarHeader: View {
 
 private struct SidebarDivider: View {
     var body: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.1))
-            .frame(height: 1)
+        SidebarWave()
             .padding(.horizontal, 4)
     }
 }
@@ -409,10 +406,16 @@ private struct SidebarRail: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            SidebarAppleMark()
+                .padding(.top, 8)
+
+            SidebarRailClock()
+                .padding(.top, 2)
+                .padding(.bottom, 6)
+
             SidebarIconButton(systemName: "sidebar.left", help: "Show the full sidebar") {
                 sidebar.isCompact = false
             }
-            .padding(.top, 8)
             .padding(.bottom, 6)
 
             ScrollView(.vertical, showsIndicators: false) {
@@ -475,9 +478,8 @@ private struct SidebarRail: View {
     }
 
     private var railDivider: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.1))
-            .frame(width: 24, height: 1)
-            .padding(.vertical, 3)
+        SidebarWave()
+            .frame(width: 27)
+            .padding(.vertical, 2)
     }
 }
