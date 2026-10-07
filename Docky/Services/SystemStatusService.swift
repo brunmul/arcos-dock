@@ -67,6 +67,7 @@ final class SystemStatusService: ObservableObject {
         let cpuSample = Self.loadCPUSample()
         let memorySample = Self.loadMemorySample()
         let networkCounters = Self.loadNetworkCounters(at: now)
+        let diskSample = Self.loadDiskSample()
 
         let cpuUsagePercent = if let cpuSample, let previousCPUSample {
             Self.cpuUsagePercent(from: previousCPUSample, to: cpuSample)
@@ -95,7 +96,9 @@ final class SystemStatusService: ObservableObject {
                 usedMemoryBytes: memorySample.usedBytes,
                 totalMemoryBytes: memorySample.totalBytes,
                 receivedBytesPerSecond: networkThroughput.receivedBytesPerSecond,
-                sentBytesPerSecond: networkThroughput.sentBytesPerSecond
+                sentBytesPerSecond: networkThroughput.sentBytesPerSecond,
+                diskUsedBytes: diskSample?.usedBytes ?? 0,
+                diskTotalBytes: diskSample?.totalBytes ?? 0
             )
         } else {
             snapshot = nil
@@ -103,6 +106,28 @@ final class SystemStatusService: ObservableObject {
 
         lastRefreshDate = now
         isLoading = false
+    }
+
+    /// How full the internal startup disk is. Read from the volume that
+    /// holds the user's home folder (the APFS Data volume), since that is
+    /// where files actually land. Free space is what Finder calls
+    /// "available": it includes purgeable space macOS frees on demand.
+    private static func loadDiskSample() -> DiskSample? {
+        let homeURL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        guard let values = try? homeURL.resourceValues(forKeys: [
+            .volumeTotalCapacityKey,
+            .volumeAvailableCapacityKey,
+            .volumeAvailableCapacityForImportantUsageKey,
+        ]),
+            let total = values.volumeTotalCapacity,
+            total > 0 else {
+            return nil
+        }
+
+        let available = values.volumeAvailableCapacityForImportantUsage
+            ?? Int64(values.volumeAvailableCapacity ?? 0)
+        let used = max(0, Int64(total) - available)
+        return DiskSample(usedBytes: UInt64(used), totalBytes: UInt64(total))
     }
 
     private static func loadCPUSample() -> CPUSample? {
@@ -252,13 +277,52 @@ struct SystemStatusSnapshot: Equatable {
     let totalMemoryBytes: UInt64
     let receivedBytesPerSecond: Double
     let sentBytesPerSecond: Double
+    /// Zero when the startup disk could not be read.
+    let diskUsedBytes: UInt64
+    let diskTotalBytes: UInt64
 
     var totalNetworkBytesPerSecond: Double {
         receivedBytesPerSecond + sentBytesPerSecond
     }
 
+    var diskUsagePercent: Double {
+        guard diskTotalBytes > 0 else {
+            return 0
+        }
+
+        return min(100, max(0, Double(diskUsedBytes) / Double(diskTotalBytes) * 100))
+    }
+
+    var diskFreeBytes: UInt64 {
+        diskTotalBytes > diskUsedBytes ? diskTotalBytes - diskUsedBytes : 0
+    }
+
+    /// Short download / upload rates ("1.2M", "300K") for the dock tile.
+    var compactReceivedRateText: String {
+        Self.compactRateText(receivedBytesPerSecond)
+    }
+
+    var compactSentRateText: String {
+        Self.compactRateText(sentBytesPerSecond)
+    }
+
+    /// The startup disk, or nil when it could not be read.
+    var diskMetric: SystemStatusMetricSnapshot? {
+        guard diskTotalBytes > 0 else {
+            return nil
+        }
+
+        return SystemStatusMetricSnapshot(
+            kind: .disk,
+            primaryText: Self.percentText(diskUsagePercent),
+            secondaryText: "SSD",
+            progress: diskUsagePercent / 100
+        )
+    }
+
+    /// Disk first: it is the one worth a glance even at a single tile.
     var metrics: [SystemStatusMetricSnapshot] {
-        [
+        (diskMetric.map { [$0] } ?? []) + [
             SystemStatusMetricSnapshot(
                 kind: .cpu,
                 primaryText: Self.percentText(cpuUsagePercent),
@@ -284,21 +348,20 @@ struct SystemStatusSnapshot: Equatable {
         "\(Int(value.rounded()))%"
     }
 
+    /// At most four characters ("0K", "850K", "1.2M", "48M"), so a rate
+    /// fits a narrow dock column. Anything under a kilobyte reads "0K":
+    /// at that level the exact byte count is noise.
     private static func compactRateText(_ bytesPerSecond: Double) -> String {
-        let units = ["B", "K", "M", "G"]
-        var value = max(0, bytesPerSecond)
+        let units = ["K", "M", "G"]
+        var value = max(0, bytesPerSecond) / 1024
         var unitIndex = 0
 
-        while value >= 1024, unitIndex < units.count - 1 {
+        while value >= 999.5, unitIndex < units.count - 1 {
             value /= 1024
             unitIndex += 1
         }
 
-        if unitIndex == 0 {
-            return "\(Int(value.rounded()))\(units[unitIndex])"
-        }
-
-        let formatted = value >= 10
+        let formatted = unitIndex == 0 || value >= 9.95
             ? String(Int(value.rounded()))
             : String(format: "%.1f", value)
         return "\(formatted)\(units[unitIndex])"
@@ -326,6 +389,7 @@ struct SystemStatusMetricSnapshot: Equatable, Identifiable {
 }
 
 enum SystemStatusMetricKind: String, CaseIterable, Identifiable {
+    case disk
     case cpu
     case memory
     case network
@@ -336,6 +400,8 @@ enum SystemStatusMetricKind: String, CaseIterable, Identifiable {
 
     var symbolName: String {
         switch self {
+        case .disk:
+            "internaldrive"
         case .cpu:
             "cpu"
         case .memory:
@@ -351,6 +417,11 @@ private struct CPUSample {
     let system: UInt64
     let idle: UInt64
     let nice: UInt64
+}
+
+private struct DiskSample {
+    let usedBytes: UInt64
+    let totalBytes: UInt64
 }
 
 private struct MemorySample {

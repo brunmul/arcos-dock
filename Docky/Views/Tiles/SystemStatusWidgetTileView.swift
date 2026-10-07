@@ -26,7 +26,12 @@ struct SystemStatusWidgetTileView: View {
             let layout = layout(in: proxy.size, visibleMetricCount: max(1, metrics.count))
 
             ZStack {
+                // Glass like the dock around it; the hover panel keeps a
+                // light tint under its text because it floats over
+                // arbitrary windows.
                 Color(nsColor: backgroundTintColor)
+                    .opacity(isExpanded ? 0.45 : 0)
+                    .dockyGlass(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                     .dockyGlassBorder(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
 
                 if !isWithinStack {
@@ -34,7 +39,7 @@ struct SystemStatusWidgetTileView: View {
                         .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
                 }
 
-                content(metrics: metrics, layout: layout)
+                content(metrics: metrics, layout: layout, size: proxy.size)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -44,8 +49,12 @@ struct SystemStatusWidgetTileView: View {
     }
 
     @ViewBuilder
-    private func content(metrics: [SystemStatusMetricSnapshot], layout: LayoutMetrics) -> some View {
-        if !metrics.isEmpty {
+    private func content(metrics: [SystemStatusMetricSnapshot], layout: LayoutMetrics, size: CGSize) -> some View {
+        if isExpanded, let snapshot = systemStatus.snapshot {
+            expandedPanel(snapshot: snapshot, size: size)
+        } else if layout.isCompact, let snapshot = systemStatus.snapshot {
+            compactStrip(snapshot: snapshot, layout: layout)
+        } else if !metrics.isEmpty {
             indicatorStrip(metrics: metrics, layout: layout)
         } else {
             emptyState(layout: layout)
@@ -60,6 +69,203 @@ struct SystemStatusWidgetTileView: View {
         }
         .padding(layout.contentPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+
+    /// Short-dock layout. A ring with a caption under it leaves the number
+    /// only a few points tall when the tile is ~40pt high, so each usage
+    /// metric becomes three stacked lines instead (name, value, thin bar),
+    /// followed by a two-line column for download and upload.
+    private func compactStrip(snapshot: SystemStatusSnapshot, layout: LayoutMetrics) -> some View {
+        HStack(alignment: .center, spacing: layout.compactColumnGap) {
+            ForEach(compactUsageMetrics(in: snapshot)) { metric in
+                compactMetric(metric: metric, layout: layout)
+            }
+
+            if renderedSpan != .one {
+                compactNetwork(snapshot: snapshot, layout: layout)
+            }
+        }
+        .padding(.horizontal, layout.compactHorizontalPadding)
+        .padding(.vertical, layout.compactVerticalPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+
+    /// Which usage columns fit: the disk alone up to two tiles (next to
+    /// the network column at two), then disk, CPU and memory.
+    private func compactUsageMetrics(in snapshot: SystemStatusSnapshot) -> [SystemStatusMetricSnapshot] {
+        let usage = snapshot.metrics.filter { $0.kind != .network }
+        switch renderedSpan {
+        case .one, .two:
+            return Array(usage.prefix(1))
+        case .three, .four:
+            return usage
+        }
+    }
+
+    private func compactNetwork(snapshot: SystemStatusSnapshot, layout: LayoutMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            compactRateLine(symbol: "arrow.down", text: snapshot.compactReceivedRateText, tint: .systemBlue, layout: layout)
+            compactRateLine(symbol: "arrow.up", text: snapshot.compactSentRateText, tint: .systemOrange, layout: layout)
+        }
+        // Fixed width, sized for "999K": rates change every two seconds and
+        // a flexible column would make its neighbours shuffle sideways.
+        .frame(width: layout.compactRateFontSize * 3.6, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Download \(rateText(snapshot.receivedBytesPerSecond)), upload \(rateText(snapshot.sentBytesPerSecond))")
+    }
+
+    private func compactRateLine(symbol: String, text: String, tint: NSColor, layout: LayoutMetrics) -> some View {
+        HStack(spacing: 2) {
+            Image(systemName: symbol)
+                .font(.system(size: layout.compactRateFontSize * 0.78, weight: .heavy))
+                .foregroundStyle(Color(nsColor: tint))
+
+            Text(text)
+                .font(.system(size: layout.compactRateFontSize, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Color.primary.opacity(0.98))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+    }
+
+    /// Hover panel: every figure spelled out, one row per resource.
+    private func expandedPanel(snapshot: SystemStatusSnapshot, size: CGSize) -> some View {
+        let base = min(max(min(size.width, size.height) * 0.058, 11), 15)
+        let usage = snapshot.metrics.filter { $0.kind != .network }
+
+        return VStack(alignment: .leading, spacing: base * 0.85) {
+            ForEach(usage) { metric in
+                expandedRow(metric: metric, detail: expandedDetail(for: metric, in: snapshot), base: base)
+            }
+
+            HStack(spacing: base * 0.5) {
+                Text("Network")
+                    .font(.system(size: base, weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(0.9))
+
+                Spacer(minLength: 0)
+
+                expandedRate(symbol: "arrow.down", text: rateText(snapshot.receivedBytesPerSecond), tint: .systemBlue, base: base)
+                expandedRate(symbol: "arrow.up", text: rateText(snapshot.sentBytesPerSecond), tint: .systemOrange, base: base)
+            }
+        }
+        .padding(base * 1.3)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func expandedRow(metric: SystemStatusMetricSnapshot, detail: String?, base: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: base * 0.3) {
+            HStack(spacing: base * 0.45) {
+                Image(systemName: metric.kind.symbolName)
+                    .font(.system(size: base * 0.95, weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(0.7))
+
+                Text(expandedTitle(for: metric.kind))
+                    .font(.system(size: base, weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(0.9))
+
+                Spacer(minLength: 0)
+
+                Text(metric.primaryText)
+                    .font(.system(size: base * 1.15, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.primary.opacity(0.98))
+            }
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule(style: .continuous)
+                        .fill(Color.primary.opacity(0.14))
+
+                    Capsule(style: .continuous)
+                        .fill(Color(nsColor: accentColor(for: metric)))
+                        .frame(width: max(base * 0.4, proxy.size.width * CGFloat(metric.progress)))
+                }
+            }
+            .frame(height: base * 0.4)
+
+            if let detail {
+                Text(detail)
+                    .font(.system(size: base * 0.82, weight: .medium))
+                    .foregroundStyle(Color.primary.opacity(0.62))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+    }
+
+    private func expandedRate(symbol: String, text: String, tint: NSColor, base: CGFloat) -> some View {
+        HStack(spacing: 2) {
+            Image(systemName: symbol)
+                .font(.system(size: base * 0.8, weight: .heavy))
+                .foregroundStyle(Color(nsColor: tint))
+
+            Text(text)
+                .font(.system(size: base * 0.95, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Color.primary.opacity(0.98))
+                .lineLimit(1)
+        }
+    }
+
+    private func expandedTitle(for kind: SystemStatusMetricKind) -> String {
+        switch kind {
+        case .disk: "SSD"
+        case .cpu: "CPU"
+        case .memory: "Memory"
+        case .network: "Network"
+        }
+    }
+
+    private func expandedDetail(for metric: SystemStatusMetricSnapshot, in snapshot: SystemStatusSnapshot) -> String? {
+        switch metric.kind {
+        case .disk:
+            return "\(byteText(snapshot.diskFreeBytes, style: .file)) free of \(byteText(snapshot.diskTotalBytes, style: .file))"
+        case .memory:
+            return "\(byteText(snapshot.usedMemoryBytes, style: .memory)) of \(byteText(snapshot.totalMemoryBytes, style: .memory))"
+        case .cpu, .network:
+            return nil
+        }
+    }
+
+    private func byteText(_ bytes: UInt64, style: ByteCountFormatter.CountStyle) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: style)
+    }
+
+    private func rateText(_ bytesPerSecond: Double) -> String {
+        "\(ByteCountFormatter.string(fromByteCount: Int64(max(0, bytesPerSecond)), countStyle: .file))/s"
+    }
+
+    private func compactMetric(metric: SystemStatusMetricSnapshot, layout: LayoutMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(metric.secondaryText)
+                .font(.system(size: layout.compactLabelFontSize, weight: .semibold))
+                .foregroundStyle(Color.primary.opacity(0.6))
+                .lineLimit(1)
+
+            Text(metric.primaryText)
+                .font(.system(size: layout.compactValueFontSize, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Color.primary.opacity(0.98))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule(style: .continuous)
+                        .fill(Color.primary.opacity(0.14))
+
+                    Capsule(style: .continuous)
+                        .fill(Color(nsColor: accentColor(for: metric)))
+                        .frame(width: max(layout.compactBarHeight, proxy.size.width * CGFloat(metric.progress)))
+                }
+            }
+            .frame(height: layout.compactBarHeight)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(metric.secondaryText) \(metric.primaryText)")
     }
 
     private func metricIndicator(metric: SystemStatusMetricSnapshot, layout: LayoutMetrics) -> some View {
@@ -157,7 +363,20 @@ struct SystemStatusWidgetTileView: View {
         let maxCircleByHeight = availableHeight * (renderedSpan == .one ? 0.6 : 0.52)
         let circleDiameter = max(0, min(widthBasedCircle, maxCircleByHeight))
 
+        // Compact (short dock) metrics: three text lines sized off the
+        // height left after a small padding.
+        let compactVerticalPadding = max(3, height * 0.09)
+        let compactUsableHeight = max(0, height - compactVerticalPadding * 2)
+
         return LayoutMetrics(
+            isCompact: height < 60,
+            compactVerticalPadding: compactVerticalPadding,
+            compactHorizontalPadding: max(7, minSide * 0.2),
+            compactColumnGap: max(4, minSide * 0.12),
+            compactLabelFontSize: min(compactUsableHeight * 0.26, 11),
+            compactValueFontSize: min(compactUsableHeight * 0.39, 17),
+            compactRateFontSize: min(compactUsableHeight * 0.34, 14),
+            compactBarHeight: min(max(2.5, compactUsableHeight * 0.09), 5),
             contentPadding: contentPadding,
             contentGap: contentGap,
             stackSpacing: stackSpacing,
@@ -177,6 +396,16 @@ struct SystemStatusWidgetTileView: View {
 
     private func accentColor(for metric: SystemStatusMetricSnapshot) -> NSColor {
         switch metric.kind {
+        case .disk:
+            if metric.progress >= 0.9 {
+                return .systemRed
+            }
+
+            if metric.progress >= 0.75 {
+                return .systemOrange
+            }
+
+            return .systemBlue
         case .cpu:
             if metric.progress >= 0.85 {
                 return .systemRed
@@ -212,6 +441,14 @@ struct SystemStatusWidgetTileView: View {
 }
 
 private struct LayoutMetrics {
+    let isCompact: Bool
+    let compactVerticalPadding: CGFloat
+    let compactHorizontalPadding: CGFloat
+    let compactColumnGap: CGFloat
+    let compactLabelFontSize: CGFloat
+    let compactValueFontSize: CGFloat
+    let compactRateFontSize: CGFloat
+    let compactBarHeight: CGFloat
     let contentPadding: CGFloat
     let contentGap: CGFloat
     let stackSpacing: CGFloat
