@@ -354,6 +354,7 @@ private struct SidebarHeader: View {
                     get: { !sidebar.isPinned },
                     set: { sidebar.isPinned = !$0 }
                 ))
+                Toggle("Website Icons", isOn: $sidebar.usesWebsiteIcons)
                 Toggle("Tinted Icons", isOn: $sidebar.usesTintedIcons)
                 Button("Open Icon Pack Folder") {
                     SidebarIconPack.shared.revealInFinder()

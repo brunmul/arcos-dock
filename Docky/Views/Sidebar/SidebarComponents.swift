@@ -38,15 +38,18 @@ enum SidebarMetrics {
 /// An app's icon, from the first of these that applies:
 ///
 ///   1. the custom icon pack (`SidebarIconPack`), for the apps it covers;
-///   2. with tinted icons on, a glyph cut out of the app's icon and drawn
+///   2. with website icons on, the icon of the app's website when one
+///      was found (`SidebarFaviconStore`);
+///   3. with tinted icons on, a glyph cut out of the app's icon and drawn
 ///      in the icon's main color (`SidebarIconGlyph`);
-///   3. the icon picked with "Change Icon...", or the app's own.
+///   4. the icon picked with "Change Icon...", or the app's own.
 struct SidebarAppIcon: View {
     let bundleIdentifier: String
     let size: CGFloat
 
     @Bindable private var preferences = DockyPreferences.shared
     @ObservedObject private var iconPack = SidebarIconPack.shared
+    @ObservedObject private var favicons = SidebarFaviconStore.shared
     @ObservedObject private var sidebar = SidebarPreferences.shared
 
     private static let ink = Color.primary.opacity(0.74)
@@ -54,6 +57,9 @@ struct SidebarAppIcon: View {
     var body: some View {
         if let packIcon = iconPack.icon(forBundleIdentifier: bundleIdentifier) {
             SidebarPackIconView(icon: packIcon, ink: Self.ink)
+                .frame(width: size, height: size)
+        } else if sidebar.usesWebsiteIcons, let favicon = favicons.icon(forBundleIdentifier: bundleIdentifier) {
+            SidebarPackIconView(icon: favicon, ink: Self.ink)
                 .frame(width: size, height: size)
         } else if sidebar.usesTintedIcons, let glyph = SidebarIconGlyph.glyph(for: image, key: glyphKey) {
             Image(nsImage: glyph.image)

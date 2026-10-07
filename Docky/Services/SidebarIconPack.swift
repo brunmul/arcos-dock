@@ -146,7 +146,7 @@ final class SidebarIconPack: ObservableObject {
 
     /// Whether every visible pixel of the image is the same color, give or
     /// take antialiasing: the mark of a glyph meant to be tinted.
-    private static func isSingleColor(_ image: NSImage) -> Bool {
+    static func isSingleColor(_ image: NSImage) -> Bool {
         let side = 32
         var rect = CGRect(x: 0, y: 0, width: side, height: side)
         guard let cgImage = image.cgImage(forProposedRect: &rect, context: nil, hints: nil),

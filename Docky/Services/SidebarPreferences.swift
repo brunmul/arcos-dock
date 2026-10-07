@@ -50,6 +50,12 @@ final class SidebarPreferences: ObservableObject {
         didSet { defaults.set(usesTintedIcons, forKey: Keys.usesTintedIcons) }
     }
 
+    /// Shows the icon an app's website uses in a browser tab, when one
+    /// can be found, in place of the app's own icon (`SidebarFaviconStore`).
+    @Published var usesWebsiteIcons: Bool {
+        didSet { defaults.set(usesWebsiteIcons, forKey: Keys.usesWebsiteIcons) }
+    }
+
     /// Width of the panel in the current mode.
     var panelWidth: CGFloat {
         isCompact ? Self.railWidth : Self.fullWidth
@@ -83,6 +89,7 @@ final class SidebarPreferences: ObservableObject {
         static let isPinned = "docky.fork.sidebar.isPinned"
         static let isCompact = "docky.fork.sidebar.isCompact"
         static let usesTintedIcons = "docky.fork.sidebar.usesTintedIcons"
+        static let usesWebsiteIcons = "docky.fork.sidebar.usesWebsiteIcons"
         static let expandedApps = "docky.fork.sidebar.expandedApps"
         static let openFolder = "docky.fork.sidebar.openFolder"
         static let folderGlyphs = "docky.fork.sidebar.folderGlyphs"
@@ -94,6 +101,7 @@ final class SidebarPreferences: ObservableObject {
         isPinned = defaults.object(forKey: Keys.isPinned) as? Bool ?? true
         isCompact = defaults.bool(forKey: Keys.isCompact)
         usesTintedIcons = defaults.object(forKey: Keys.usesTintedIcons) as? Bool ?? true
+        usesWebsiteIcons = defaults.object(forKey: Keys.usesWebsiteIcons) as? Bool ?? true
         expandedAppIdentifiers = Set(defaults.stringArray(forKey: Keys.expandedApps) ?? [])
         openFolderIdentifier = defaults.string(forKey: Keys.openFolder)
         if let data = defaults.data(forKey: Keys.folderGlyphs),
