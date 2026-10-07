@@ -251,16 +251,17 @@ enum SidebarPinnedFolder: Identifiable, Equatable {
     }
 }
 
-/// A folder as a tile the size of an app tile, carrying one symbol in one
-/// color, the way a project carries its icon in Claude. The symbol and the
-/// color are picked from the tile's right-click menu. Clicking the tile
-/// lists the folder's contents under the block of tiles.
+/// A folder as a tile the size of an app tile, drawn like a project's icon
+/// in Claude: a line symbol on a soft wash of its own color. The symbol
+/// and the color are picked from the tile's right-click menu. Clicking the
+/// tile lists the folder's contents under the block of tiles.
 struct SidebarFolderTileView: View {
     let folder: SidebarPinnedFolder
     let isCurrent: Bool
     let action: () -> Void
 
     @ObservedObject private var sidebar = SidebarPreferences.shared
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isHovered = false
 
     private var glyph: SidebarFolderGlyph {
@@ -268,18 +269,24 @@ struct SidebarFolderTileView: View {
     }
 
     var body: some View {
+        let tint = Color(nsColor: glyph.tint.nsColor)
+        let shape = RoundedRectangle(cornerRadius: SidebarMetrics.tileCornerRadius, style: .continuous)
+
         Button(action: action) {
-            Image(systemName: glyph.symbol)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color(nsColor: glyph.tint.nsColor))
+            Image(systemName: glyph.outlineSymbol)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(tint)
+                // Deepened on a light sidebar, lifted on a dark one, so the
+                // line stays readable on a wash of the same hue.
+                .brightness(colorScheme == .dark ? 0.12 : -0.18)
                 .frame(maxWidth: .infinity)
                 .frame(height: SidebarMetrics.tileHeight)
-                .background(SidebarItemBackground(
-                    isHovered: isHovered,
-                    isCurrent: isCurrent,
-                    restingOpacity: 0.07,
-                    cornerRadius: SidebarMetrics.tileCornerRadius
-                ))
+                .background(shape.fill(tint.opacity(washOpacity)))
+                .overlay {
+                    // The open folder is ringed in its own color rather
+                    // than turned into the white pill of a current app.
+                    shape.strokeBorder(tint.opacity(isCurrent ? 0.75 : 0), lineWidth: 1.5)
+                }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -294,6 +301,13 @@ struct SidebarFolderTileView: View {
         }
     }
 
+    private var washOpacity: Double {
+        if isCurrent {
+            return 0.3
+        }
+        return isHovered ? 0.26 : 0.17
+    }
+
     private var contextActions: [ContextAction] {
         let current = glyph
         let identifier = folder.id
@@ -303,7 +317,7 @@ struct SidebarFolderTileView: View {
             ContextAction.action(
                 choice.title,
                 image: NSImage(systemSymbolName: choice.symbol, accessibilityDescription: nil),
-                isOn: current.symbol == choice.symbol
+                isOn: current.outlineSymbol == choice.symbol
             ) {
                 SidebarPreferences.shared.setGlyphSymbol(choice.symbol, forFolder: identifier, named: name)
             }

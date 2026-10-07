@@ -129,8 +129,8 @@ final class SidebarPreferences: ObservableObject {
     }
 }
 
-/// A pinned folder's icon in the sidebar: one symbol in one color, picked
-/// from a short list the way a project's icon is picked in Claude.
+/// A pinned folder's icon in the sidebar, in the manner of a project's icon
+/// in Claude: a line-drawn symbol on a soft wash of its own color.
 struct SidebarFolderGlyph: Codable, Equatable {
     var symbol: String
     var tint: Tint
@@ -146,7 +146,7 @@ struct SidebarFolderGlyph: Codable, Equatable {
 
         var nsColor: NSColor {
             switch self {
-            case .gray: .secondaryLabelColor
+            case .gray: .systemGray
             case .blue: .systemBlue
             case .purple: .systemPurple
             case .pink: .systemPink
@@ -159,33 +159,46 @@ struct SidebarFolderGlyph: Codable, Equatable {
         }
     }
 
+    /// The symbol in its line-drawn form. Icons saved before the folders
+    /// took this style were filled ones; they map to the same symbol.
+    var outlineSymbol: String {
+        Self.outline(symbol)
+    }
+
+    static func outline(_ symbol: String) -> String {
+        symbol.hasSuffix(".fill") ? String(symbol.dropLast(5)) : symbol
+    }
+
     /// The symbols offered in the folder's menu, with the name shown there.
     static let choices: [(symbol: String, title: String)] = [
-        ("folder.fill", "Folder"),
-        ("square.grid.2x2.fill", "Apps"),
-        ("wrench.and.screwdriver.fill", "Tools"),
+        ("folder", "Folder"),
+        ("square.grid.2x2", "Apps"),
+        ("wrench.and.screwdriver", "Tools"),
         ("sparkles", "Sparkles"),
-        ("bubble.left.and.bubble.right.fill", "Chat"),
-        ("play.rectangle.fill", "Media"),
+        ("bubble.left.and.bubble.right", "Chat"),
+        ("play.rectangle", "Media"),
         ("music.note", "Music"),
-        ("photo.fill", "Photos"),
-        ("paintbrush.fill", "Design"),
-        ("pencil", "Writing"),
-        ("doc.fill", "Documents"),
-        ("book.fill", "Reading"),
-        ("terminal.fill", "Code"),
-        ("chart.bar.fill", "Data"),
-        ("briefcase.fill", "Work"),
-        ("desktopcomputer", "Desktop"),
-        ("arrow.down.circle.fill", "Downloads"),
+        ("camera", "Camera"),
+        ("photo", "Photos"),
+        ("paintpalette", "Design"),
+        ("pencil.and.outline", "Writing"),
+        ("doc.text", "Documents"),
+        ("book", "Reading"),
+        ("chevron.left.forwardslash.chevron.right", "Code"),
+        ("flask", "Lab"),
+        ("chart.bar", "Data"),
+        ("briefcase", "Work"),
+        ("clock", "Time"),
+        ("display", "Desktop"),
+        ("arrow.down.circle", "Downloads"),
         ("globe", "Web"),
-        ("cart.fill", "Shopping"),
-        ("gamecontroller.fill", "Games"),
-        ("house.fill", "Home"),
-        ("heart.fill", "Favorites"),
-        ("star.fill", "Star"),
-        ("bolt.fill", "Bolt"),
-        ("lock.fill", "Private")
+        ("cart", "Shopping"),
+        ("gamecontroller", "Games"),
+        ("house", "Home"),
+        ("heart", "Favorites"),
+        ("star", "Star"),
+        ("lightbulb", "Ideas"),
+        ("lock", "Private")
     ]
 
     /// A starting icon guessed from the folder's name (English and French),
@@ -193,20 +206,20 @@ struct SidebarFolderGlyph: Codable, Equatable {
     static func suggested(forName name: String) -> SidebarFolderGlyph {
         let lowered = name.lowercased()
         let rules: [(keywords: [String], symbol: String, tint: Tint)] = [
-            (["util", "outil", "tool", "system", "système"], "wrench.and.screwdriver.fill", .gray),
-            (["media", "média", "video", "vidéo", "film"], "play.rectangle.fill", .red),
+            (["util", "outil", "tool", "system", "système"], "wrench.and.screwdriver", .teal),
+            (["media", "média", "video", "vidéo", "film"], "play.rectangle", .red),
             (["ai", "ia", "intelligence"], "sparkles", .orange),
-            (["com", "chat", "message", "social", "mail"], "bubble.left.and.bubble.right.fill", .green),
-            (["bureau", "desktop"], "desktopcomputer", .blue),
-            (["app"], "square.grid.2x2.fill", .blue),
-            (["download", "télécharg", "telecharg"], "arrow.down.circle.fill", .blue),
-            (["doc"], "doc.fill", .blue),
+            (["com", "chat", "message", "social", "mail"], "bubble.left.and.bubble.right", .green),
+            (["bureau", "desktop"], "display", .blue),
+            (["app"], "square.grid.2x2", .purple),
+            (["download", "télécharg", "telecharg"], "arrow.down.circle", .pink),
+            (["doc"], "doc.text", .blue),
             (["music", "musique", "audio"], "music.note", .pink),
-            (["photo", "image", "picture"], "photo.fill", .teal),
-            (["design", "créa", "crea"], "paintbrush.fill", .purple),
-            (["dev", "code"], "terminal.fill", .gray),
-            (["game", "jeu"], "gamecontroller.fill", .purple),
-            (["work", "travail", "pro"], "briefcase.fill", .orange)
+            (["photo", "image", "picture"], "photo", .teal),
+            (["design", "créa", "crea"], "paintpalette", .purple),
+            (["dev", "code"], "chevron.left.forwardslash.chevron.right", .orange),
+            (["game", "jeu"], "gamecontroller", .purple),
+            (["work", "travail", "pro"], "briefcase", .orange)
         ]
 
         for rule in rules {
@@ -219,6 +232,6 @@ struct SidebarFolderGlyph: Codable, Equatable {
                 return SidebarFolderGlyph(symbol: rule.symbol, tint: rule.tint)
             }
         }
-        return SidebarFolderGlyph(symbol: "folder.fill", tint: .gray)
+        return SidebarFolderGlyph(symbol: "folder", tint: .gray)
     }
 }
