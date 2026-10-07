@@ -69,8 +69,7 @@ struct CalendarWidgetTileView: View {
                 let expandedLayout = expandedLayout(in: proxy.size)
 
                 ZStack {
-                    Color(nsColor: backgroundTintColor)
-                        .dockyGlassBorder(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                    tileBackground
 
                     if !isWithinStack {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -112,13 +111,10 @@ struct CalendarWidgetTileView: View {
         } else if renderedSpan != .one, displayedHeadEvents.count == 2 {
             dualUp(events: displayedHeadEvents, layout: layout, now: now)
         } else if let event = displayedNextEvent {
-            switch renderedSpan {
-            case .one:
+            if renderedSpan == .one {
                 oneUp(event: event, layout: layout, now: now)
-            case .two:
-                twoUp(event: event, layout: layout, now: now)
-            case .three, .four:
-                threeUp(event: event, layout: layout, now: now)
+            } else {
+                singleUp(event: event, layout: layout, now: now)
             }
         } else {
             emptyState(layout: layout)
@@ -154,129 +150,129 @@ struct CalendarWidgetTileView: View {
         .accessibilityLabel(fullDateText(for: now))
     }
 
-    private func oneUp(event: CalendarEventSnapshot, layout: LayoutMetrics, now: Date) -> some View {
-        VStack(spacing: layout.stackSpacing) {
-            Text("UP NEXT")
-                .font(.system(size: layout.captionFontSize, weight: .semibold))
-                .foregroundStyle(Color.primary.opacity(0.72))
+    // The tile is only as tall as the dock, so every layout below is built
+    // from at most two text lines sized off the tile height. That keeps
+    // titles around 11pt on a small dock instead of the 5-6pt a three-line
+    // stack would leave.
 
+    private func oneUp(event: CalendarEventSnapshot, layout: LayoutMetrics, now: Date) -> some View {
+        VStack(spacing: layout.rowSpacing * 2) {
             Text(shortTimeText(for: event, now: now))
-                .font(.system(size: layout.prominentFontSize * 0.75, weight: .bold, design: .rounded))
+                .font(.system(size: layout.rowTitleFontSize, weight: .bold, design: .rounded))
                 .foregroundStyle(Color.primary.opacity(0.98))
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.6)
 
             Circle()
                 .fill(Color(nsColor: event.color).opacity(0.92))
-                .frame(width: 6, height: 6)
+                .frame(width: layout.accentWidth * 1.6, height: layout.accentWidth * 1.6)
         }
-        .padding(layout.contentPadding / 2)
+        .padding(.horizontal, layout.verticalPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func twoUp(event: CalendarEventSnapshot, layout: LayoutMetrics, now: Date) -> some View {
-        HStack(spacing: layout.contentGap) {
-            eventAccent(event: event, layout: layout)
+    /// One event: title on the first line, when it starts (and the join
+    /// button) on the second.
+    private func singleUp(event: CalendarEventSnapshot, layout: LayoutMetrics, now: Date) -> some View {
+        HStack(spacing: layout.rowGap) {
+            RoundedRectangle(cornerRadius: layout.accentWidth / 2, style: .continuous)
+                .fill(Color(nsColor: event.color).opacity(0.96))
+                .frame(width: layout.accentWidth, height: max(0, layout.rowHeight * 2 + layout.rowSpacing - 4))
 
-            VStack(alignment: .leading, spacing: layout.stackSpacing) {
-                Text("UP NEXT")
-                    .font(.system(size: layout.captionFontSize, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.72))
-
-                Text(event.title)
-                    .font(.system(size: layout.titleFontSize, weight: .bold))
-                    .foregroundStyle(Color.primary.opacity(0.98))
-                    .lineLimit(2)
-
-                scheduleRow(for: event, layout: layout, now: now, opacity: 0.82)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(layout.contentPadding)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-    }
-
-    private func threeUp(event: CalendarEventSnapshot, layout: LayoutMetrics, now: Date) -> some View {
-        HStack(spacing: layout.contentGap) {
-            eventAccent(event: event, layout: layout)
-
-            VStack(alignment: .leading, spacing: layout.stackSpacing) {
-                HStack(spacing: 6) {
-                    Text("UP NEXT")
-                        .font(.system(size: layout.captionFontSize, weight: .semibold))
-                        .foregroundStyle(Color.primary.opacity(0.72))
-
-                    Text(event.calendarTitle)
-                        .font(.system(size: layout.captionFontSize, weight: .medium))
-                        .foregroundStyle(Color.primary.opacity(0.58))
+            VStack(alignment: .leading, spacing: layout.rowSpacing) {
+                HStack(spacing: layout.rowGap) {
+                    Text(event.title)
+                        .font(.system(size: layout.rowTitleFontSize, weight: .semibold))
+                        .foregroundStyle(Color.primary.opacity(0.98))
                         .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Spacer(minLength: 0)
+
+                    invitationCountBadge(layout: layout)
                 }
+                .frame(height: layout.rowHeight)
 
-                Text(event.title)
-                    .font(.system(size: layout.titleFontSize, weight: .bold))
-                    .foregroundStyle(Color.primary.opacity(0.98))
-                    .lineLimit(2)
+                HStack(spacing: layout.rowGap) {
+                    Text(scheduleLine(for: event, now: now))
+                        .font(.system(size: layout.rowTimeFontSize, weight: .medium, design: .rounded))
+                        .foregroundStyle(Color.primary.opacity(0.66))
+                        .lineLimit(1)
 
-                scheduleRow(for: event, layout: layout, now: now, opacity: 0.84)
+                    Spacer(minLength: 0)
+
+                    if let quickJoinURL = event.quickJoinURL {
+                        CalendarJoinButton(
+                            url: quickJoinURL,
+                            fontSize: layout.joinFontSize,
+                            showsTitle: renderedSpan != .two,
+                            isCompact: true
+                        )
+                    }
+                }
+                .frame(height: layout.rowHeight)
             }
-
-            Spacer(minLength: 0)
         }
-        .padding(layout.contentPadding)
-        .padding(.horizontal, (cornerRadius - layout.contentPadding) / 2)
+        .padding(.horizontal, layout.horizontalPadding)
+        .padding(.vertical, layout.verticalPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
-    /// Two stacked rows, one per upcoming event: color bar, start time,
-    /// title, and a join button when the event carries a meeting link.
+    /// Two events, one line each: color bar, start time, title, and a join
+    /// button when the event carries a meeting link.
     private func dualUp(events: [CalendarEventSnapshot], layout: LayoutMetrics, now: Date) -> some View {
-        VStack(alignment: .leading, spacing: layout.stackSpacing) {
-            ForEach(Array(events.enumerated()), id: \.offset) { _, event in
-                dualRow(event: event, layout: layout, now: now)
+        HStack(spacing: layout.rowGap) {
+            VStack(alignment: .leading, spacing: layout.rowSpacing) {
+                ForEach(Array(events.enumerated()), id: \.offset) { _, event in
+                    eventRow(event: event, layout: layout, now: now)
+                }
             }
-        }
-        .padding(layout.contentPadding)
-        .padding(.horizontal, renderedSpan == .two ? 0 : (cornerRadius - layout.contentPadding) / 2)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .overlay(alignment: .topTrailing) {
+
             invitationCountBadge(layout: layout)
         }
+        .padding(.horizontal, layout.horizontalPadding)
+        .padding(.vertical, layout.verticalPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
-    private func dualRow(event: CalendarEventSnapshot, layout: LayoutMetrics, now: Date) -> some View {
-        HStack(spacing: layout.contentGap * 0.6) {
-            RoundedRectangle(cornerRadius: layout.accentWidth / 4, style: .continuous)
+    private func eventRow(event: CalendarEventSnapshot, layout: LayoutMetrics, now: Date) -> some View {
+        HStack(spacing: layout.rowGap) {
+            RoundedRectangle(cornerRadius: layout.accentWidth / 2, style: .continuous)
                 .fill(Color(nsColor: event.color).opacity(0.96))
-                .frame(width: layout.accentWidth / 2)
+                .frame(width: layout.accentWidth, height: max(0, layout.rowHeight - 4))
 
-            VStack(alignment: .leading, spacing: 0) {
-                Text(compactTimeText(for: event, now: now))
-                    .font(.system(size: layout.captionFontSize * 1.1, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.primary.opacity(0.66))
+            if let timeText = rowTimeText(for: event, now: now) {
+                Text(timeText)
+                    .font(.system(size: layout.rowTimeFontSize, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.primary.opacity(0.62))
                     .lineLimit(1)
-
-                Text(event.title)
-                    .font(.system(size: layout.detailFontSize * 1.15, weight: .bold))
-                    .foregroundStyle(Color.primary.opacity(0.98))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                    .fixedSize()
             }
+
+            Text(event.title)
+                .font(.system(size: layout.rowTitleFontSize, weight: .semibold))
+                .foregroundStyle(Color.primary.opacity(0.98))
+                .lineLimit(1)
+                .truncationMode(.tail)
 
             Spacer(minLength: 0)
 
             if let quickJoinURL = event.quickJoinURL {
+                // Icon only below four tiles wide: the word "Join" would
+                // take the room the event title needs.
                 CalendarJoinButton(
                     url: quickJoinURL,
-                    fontSize: layout.captionFontSize * 1.1,
-                    showsTitle: renderedSpan != .two
+                    fontSize: layout.joinFontSize,
+                    showsTitle: renderedSpan == .four,
+                    isCompact: true
                 )
             }
         }
-        .frame(maxHeight: .infinity)
+        .frame(height: layout.rowHeight)
     }
 
-    /// Small "2 ✉" pill in the tile corner while invitations wait for an answer.
+    /// Orange envelope-and-count pill while invitations wait for an answer.
     @ViewBuilder
     private func invitationCountBadge(layout: LayoutMetrics) -> some View {
         let count = displayedInvitations.count
@@ -285,41 +281,35 @@ struct CalendarWidgetTileView: View {
                 Image(systemName: "envelope.fill")
                 Text("\(count)")
             }
-            .font(.system(size: layout.captionFontSize * 0.9, weight: .bold, design: .rounded))
+            .font(.system(size: layout.joinFontSize, weight: .bold, design: .rounded))
             .foregroundStyle(Color.white)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 1.5)
+            .padding(.horizontal, layout.joinFontSize * 0.5)
+            .padding(.vertical, layout.joinFontSize * 0.2)
             .background(Capsule().fill(Color.orange))
-            .padding(layout.contentPadding * 0.45)
+            .fixedSize()
             .accessibilityLabel("\(count) invitations waiting for an answer")
         }
     }
 
-    /// Start time for a tile row: "Now" while the event runs, the clock
-    /// time today, weekday plus time on later days.
-    private func compactTimeText(for event: CalendarEventSnapshot, now: Date) -> String {
+    /// Start time for a tile row, kept short because it shares one line
+    /// with the title: "Now" while the event runs, the clock time today,
+    /// weekday plus time on later days. An all-day event happening today
+    /// gets no label at all, so its title has the whole line.
+    private func rowTimeText(for event: CalendarEventSnapshot, now: Date) -> String? {
         let calendarRef = Calendar.autoupdatingCurrent
         let isToday = calendarRef.isDate(event.startDate, inSameDayAs: now)
+        let weekday = shortWeekdayFormatter.string(from: event.startDate)
 
         if event.isAllDay {
-            return isToday ? "All day" : "\(shortWeekdayFormatter.string(from: event.startDate)) · all day"
+            return isToday || event.startDate <= now ? nil : weekday
         }
 
         if event.startDate <= now {
-            return "Now · until \(timeFormatter.string(from: event.endDate))"
+            return "Now"
         }
 
         let time = timeFormatter.string(from: event.startDate)
-        if isToday {
-            let relative = relativeTimeText(for: event.startDate, now: now)
-            return relative.isEmpty ? time : "\(time) · \(relative)"
-        }
-
-        if calendarRef.isDateInTomorrow(event.startDate) {
-            return "Tomorrow \(time)"
-        }
-
-        return "\(shortWeekdayFormatter.string(from: event.startDate)) \(time)"
+        return isToday ? time : "\(weekday) \(time)"
     }
 
     @ViewBuilder
@@ -518,62 +508,51 @@ struct CalendarWidgetTileView: View {
     }
 
     private func emptyState(layout: LayoutMetrics) -> some View {
-        VStack(alignment: .center, spacing: layout.stackSpacing) {
+        HStack(spacing: layout.rowGap) {
             if calendar.isLoading {
                 ProgressView()
                     .controlSize(.small)
                     .tint(Color.primary.opacity(0.92))
             } else {
                 Image(systemName: calendar.lastErrorDescription == nil ? "calendar.badge.clock" : "calendar.badge.exclamationmark")
-                    .font(.system(size: layout.emptyIconSize, weight: .semibold))
+                    .font(.system(size: layout.rowTitleFontSize * 1.3, weight: .semibold))
                     .foregroundStyle(Color.primary.opacity(0.9))
             }
 
-            Text(emptyTitle)
-                .font(.system(size: layout.titleFontSize, weight: .semibold))
-                .foregroundStyle(Color.primary.opacity(0.96))
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-
-            if renderedSpan != .one, let detail = emptyDetail {
-                Text(detail)
-                    .font(.system(size: layout.detailFontSize))
-                    .foregroundStyle(Color.primary.opacity(0.68))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(renderedSpan == .two ? 2 : 3)
+            if renderedSpan != .one {
+                Text(emptyTitle)
+                    .font(.system(size: layout.rowTitleFontSize, weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(0.96))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
             }
         }
-        .padding(layout.contentPadding)
+        .padding(.horizontal, layout.horizontalPadding)
+        .padding(.vertical, layout.verticalPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private func eventAccent(event: CalendarEventSnapshot, layout: LayoutMetrics) -> some View {
-        RoundedRectangle(cornerRadius: layout.accentWidth / 2, style: .continuous)
-            .fill(Color(nsColor: event.color).opacity(0.96))
-            .frame(width: layout.accentWidth)
-    }
-
-    private func scheduleRow(for event: CalendarEventSnapshot, layout: LayoutMetrics, now: Date, opacity: Double) -> some View {
-        HStack(spacing: 4) {
-            Text(scheduleLine(for: event, now: now))
-                .lineLimit(1)
-
-            Spacer(minLength: 0)
-
-            if let quickJoinURL = event.quickJoinURL {
-                CalendarJoinButton(
-                    url: quickJoinURL,
-                    fontSize: layout.captionFontSize,
-                    showsTitle: renderedSpan != .two
-                )
-            }
-        }
-        .font(.system(size: layout.detailFontSize, weight: .medium))
-        .foregroundStyle(Color.primary.opacity(opacity))
     }
 
     private var backgroundTintColor: NSColor {
         NSColor.windowBackgroundColor
+    }
+
+    /// Glass like the dock around it, so the widget reads as part of the
+    /// dock rather than a white card on top of it. The hover panel floats
+    /// over arbitrary windows, so it keeps a light tint under its text.
+    /// The date variant stays opaque: it stands in for the Calendar icon.
+    @ViewBuilder
+    private var tileBackground: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        if showsDateVariant {
+            Color(nsColor: backgroundTintColor)
+                .dockyGlassBorder(in: shape)
+        } else {
+            Color(nsColor: backgroundTintColor)
+                .opacity(isExpanded ? 0.45 : 0)
+                .dockyGlass(.regular, in: shape)
+                .dockyGlassBorder(in: shape)
+        }
     }
 
     private func shouldShowLocation(for event: CalendarEventSnapshot) -> Bool {
@@ -634,16 +613,32 @@ struct CalendarWidgetTileView: View {
         let contentGap = min(minSide * 0.1, minSide * 0.18)
         let stackSpacing = min(minSide * 0.05, minSide * 0.1)
 
+        // Event rows: the tile height is split into two equal lines with
+        // just enough padding to clear the rounded corners, and the text
+        // fills about three quarters of a line.
+        let verticalPadding = max(3, height * 0.09)
+        let rowSpacing = max(1, height * 0.03)
+        let rowHeight = max(0, (height - verticalPadding * 2 - rowSpacing) / 2)
+        let rowTitleFontSize = min(rowHeight * 0.74, 15)
+
         return LayoutMetrics(
             contentPadding: contentPadding,
             contentGap: contentGap,
             stackSpacing: stackSpacing,
-            accentWidth: min(minSide * 0.09, 10),
+            accentWidth: min(max(minSide * 0.07, 2.5), 5),
             captionFontSize: min(minSide * 0.1, 11),
             titleFontSize: min(minSide * 0.17, renderedSpan == .one ? 14 : 16),
             prominentFontSize: min(minSide * 0.27, 26),
             detailFontSize: min(minSide * 0.12, 13),
-            emptyIconSize: min(minSide * 0.28, 28)
+            emptyIconSize: min(minSide * 0.28, 28),
+            verticalPadding: verticalPadding,
+            horizontalPadding: max(7, minSide * 0.2),
+            rowSpacing: rowSpacing,
+            rowHeight: rowHeight,
+            rowGap: max(3, rowTitleFontSize * 0.4),
+            rowTitleFontSize: rowTitleFontSize,
+            rowTimeFontSize: rowTitleFontSize * 0.86,
+            joinFontSize: rowTitleFontSize * 0.76
         )
     }
 
@@ -795,6 +790,14 @@ private struct LayoutMetrics {
     let prominentFontSize: CGFloat
     let detailFontSize: CGFloat
     let emptyIconSize: CGFloat
+    let verticalPadding: CGFloat
+    let horizontalPadding: CGFloat
+    let rowSpacing: CGFloat
+    let rowHeight: CGFloat
+    let rowGap: CGFloat
+    let rowTitleFontSize: CGFloat
+    let rowTimeFontSize: CGFloat
+    let joinFontSize: CGFloat
 }
 
 private struct ExpandedLayoutMetrics {
@@ -932,6 +935,8 @@ private struct CalendarJoinButton: View {
     let url: URL
     let fontSize: CGFloat
     let showsTitle: Bool
+    /// Tighter vertical padding so the pill fits inside one tile row.
+    var isCompact: Bool = false
 
     @State private var isHovered = false
 
@@ -947,8 +952,8 @@ private struct CalendarJoinButton: View {
             }
             .font(.system(size: fontSize, weight: .bold, design: .rounded))
             .foregroundStyle(Color.white)
-            .padding(.horizontal, fontSize * 0.7)
-            .padding(.vertical, fontSize * 0.35)
+            .padding(.horizontal, fontSize * (isCompact ? 0.55 : 0.7))
+            .padding(.vertical, fontSize * (isCompact ? 0.22 : 0.35))
             .background(Capsule().fill(Color.green.opacity(isHovered ? 1 : 0.86)))
             .contentShape(Capsule())
         }

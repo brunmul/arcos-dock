@@ -2226,7 +2226,10 @@ struct TileView: View {
             return [.one]
         }
 
-        return widget.kind.supportedSpans.filter { $0 != .four }
+        // Personal fork: "4 Tiles" is offered too. On a small dock a widget
+        // is only about 40pt tall, so width is the one way to give its text
+        // more room.
+        return widget.kind.supportedSpans
     }
 
     private func availableAppWidgetSpans(for kind: WidgetKind) -> [TileSpan] {

@@ -28,7 +28,12 @@ struct NowPlayingWidgetTileView: View {
             let expandedLayout = expandedLayout(in: proxy.size)
 
             ZStack {
+                // Glass like the dock around it. While something plays, a
+                // wash of the artwork color keeps the tile tied to the
+                // track without turning it back into a solid block.
                 Color(nsColor: prominentTintColor)
+                    .opacity(playbackState?.isPresentable == true ? (isExpanded ? 0.4 : 0.22) : 0)
+                    .dockyGlass(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                     .dockyGlassBorder(in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
 
                 if !isWithinStack {
@@ -124,6 +129,7 @@ struct NowPlayingWidgetTileView: View {
                     .font(.system(size: layout.titleFontSize, weight: .semibold))
                     .foregroundStyle(primaryForegroundColor)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
 
                 if playbackArtist.isEmpty == false {
                     Text(playbackArtist)
@@ -140,7 +146,12 @@ struct NowPlayingWidgetTileView: View {
                     layout: layout,
                     action: togglePlayPause
                 )
-                controlButton("forward.fill", layout: layout, action: skipToNext)
+                // At three tiles the title needs the room more than a
+                // second button does; skip stays one hover away, in the
+                // expanded panel, and comes back on the tile at four.
+                if renderedSpan == .four {
+                    controlButton("forward.fill", layout: layout, action: skipToNext)
+                }
             }
             .fixedSize()
             .padding(.trailing, layout.trailingControlPadding)
@@ -473,12 +484,24 @@ struct NowPlayingWidgetTileView: View {
         let contentGap = min(minSide * 0.1, minSide * 0.2)
         let stackSpacing = min(minSide * 0.05, minSide * 0.1)
         let controlClusterSpacing = min(minSide * 0.08, minSide * 0.14)
-        let controlButtonSize = min(minSide * 0.24, availableHeight)
         let artworkWidthFraction: CGFloat = renderedSpan == .two ? 0.34 : 0.24
         let artworkSize = min(availableHeight, width * artworkWidthFraction)
         let artworkCornerRadius = min(artworkSize / 2, max(0, cornerRadius - contentPadding))
-        let titleFontSize = min(minSide * 0.18, 16)
-        let subtitleFontSize = min(minSide * 0.14, 13)
+        // Sized off the tile height so they stay legible on a small dock:
+        // title and artist together fill most of the height, and the
+        // transport buttons are large enough to hit. The two-tile layout
+        // has three buttons beside the artwork, so they are also capped to
+        // the width that is left.
+        let desiredControlButtonSize = min(minSide * 0.42, availableHeight)
+        let twoUpControlRoom = max(
+            0,
+            width - contentPadding * 2 - artworkSize - contentGap - controlClusterSpacing * 2
+        ) / 3
+        let controlButtonSize = renderedSpan == .two
+            ? min(desiredControlButtonSize, twoUpControlRoom)
+            : desiredControlButtonSize
+        let titleFontSize = min(minSide * 0.3, 16)
+        let subtitleFontSize = min(minSide * 0.25, 13)
         let controlIconSize = min(controlButtonSize * 0.72, controlButtonSize)
         let largeGlyphSize = min(minSide * 0.42, minSide * 0.56)
 
@@ -529,12 +552,14 @@ struct NowPlayingWidgetTileView: View {
         prominentTintColor.perceivedLuminance > 0.62
     }
 
+    // The background is glass now, not a solid artwork color, so text
+    // follows the system appearance instead of the artwork's luminance.
     private var primaryForegroundColor: Color {
-        Color(nsColor: usesDarkForeground ? .black.withAlphaComponent(0.82) : .white.withAlphaComponent(0.96))
+        Color.primary.opacity(0.96)
     }
 
     private var secondaryForegroundColor: Color {
-        Color(nsColor: usesDarkForeground ? .black.withAlphaComponent(0.56) : .white.withAlphaComponent(0.72))
+        Color.primary.opacity(0.62)
     }
 
     private var ownerDisplayName: String {

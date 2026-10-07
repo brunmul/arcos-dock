@@ -39,6 +39,37 @@ struct WidgetPermissionCTAView: View {
             let reasonSize = min(max(minSide * 0.11, 10), 14)
             let spacing = min(max(minSide * 0.06, 4), 12)
 
+            if !isExpanded, proxy.size.height < 60 {
+                // Short dock: icon, reason and button stacked do not fit in
+                // ~40pt, and the button was the part that got clipped. Show
+                // only the button, with the icon inside it.
+                let compactSize = min(max(proxy.size.height * 0.28, 9), 13)
+
+                Button {
+                    performAction()
+                } label: {
+                    HStack(spacing: compactSize * 0.4) {
+                        Image(systemName: iconName)
+                        if renderedSpan != .one {
+                            Text(buttonTitle)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                    }
+                    .font(.system(size: compactSize, weight: .semibold))
+                    .foregroundStyle(foreground.opacity(0.9))
+                    .padding(.horizontal, compactSize * 0.9)
+                    .padding(.vertical, compactSize * 0.55)
+                    .background(
+                        Capsule().fill(foreground.opacity(0.16))
+                    )
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help(reasonText)
+                .padding(.horizontal, 6)
+                .frame(width: proxy.size.width, height: proxy.size.height)
+            } else {
             VStack(spacing: spacing) {
                 Image(systemName: iconName)
                     .font(.system(size: iconSize, weight: .semibold))
@@ -72,6 +103,7 @@ struct WidgetPermissionCTAView: View {
             }
             .padding(min(max(minSide * 0.1, 8), 20))
             .frame(width: proxy.size.width, height: proxy.size.height)
+            }
         }
     }
 
