@@ -41,6 +41,23 @@ struct CalendarWidgetTileView: View {
         return events.first(where: { !$0.isAllDay }) ?? events.first
     }
 
+    /// Unanswered invitations, filtered to the configured calendars like the agenda.
+    private var displayedInvitations: [CalendarEventSnapshot] {
+        let ids = configuredCalendarIDs
+        guard !ids.isEmpty else { return calendar.pendingInvitations }
+        let allowed = Set(ids)
+        return calendar.pendingInvitations.filter { allowed.contains($0.calendarIdentifier) }
+    }
+
+    /// The two events the tile leads with. Timed events win the slots so an
+    /// all-day entry (a birthday, a holiday) cannot hide the next meeting.
+    private var displayedHeadEvents: [CalendarEventSnapshot] {
+        let events = displayedEvents
+        let timed = events.filter { !$0.isAllDay }
+        let allDay = events.filter(\.isAllDay)
+        return Array((timed + allDay).prefix(2))
+    }
+
     var body: some View {
         #if DEBUG
         let _ = Self._printChanges()
@@ -92,6 +109,8 @@ struct CalendarWidgetTileView: View {
             dateOneUp(layout: layout, now: now)
         } else if calendar.permissionStatus != .granted {
             permissionCTA(isExpanded: false)
+        } else if renderedSpan != .one, displayedHeadEvents.count == 2 {
+            dualUp(events: displayedHeadEvents, layout: layout, now: now)
         } else if let event = displayedNextEvent {
             switch renderedSpan {
             case .one:
@@ -209,6 +228,100 @@ struct CalendarWidgetTileView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
+    /// Two stacked rows, one per upcoming event: color bar, start time,
+    /// title, and a join button when the event carries a meeting link.
+    private func dualUp(events: [CalendarEventSnapshot], layout: LayoutMetrics, now: Date) -> some View {
+        VStack(alignment: .leading, spacing: layout.stackSpacing) {
+            ForEach(Array(events.enumerated()), id: \.offset) { _, event in
+                dualRow(event: event, layout: layout, now: now)
+            }
+        }
+        .padding(layout.contentPadding)
+        .padding(.horizontal, renderedSpan == .two ? 0 : (cornerRadius - layout.contentPadding) / 2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .overlay(alignment: .topTrailing) {
+            invitationCountBadge(layout: layout)
+        }
+    }
+
+    private func dualRow(event: CalendarEventSnapshot, layout: LayoutMetrics, now: Date) -> some View {
+        HStack(spacing: layout.contentGap * 0.6) {
+            RoundedRectangle(cornerRadius: layout.accentWidth / 4, style: .continuous)
+                .fill(Color(nsColor: event.color).opacity(0.96))
+                .frame(width: layout.accentWidth / 2)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text(compactTimeText(for: event, now: now))
+                    .font(.system(size: layout.captionFontSize * 1.1, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color.primary.opacity(0.66))
+                    .lineLimit(1)
+
+                Text(event.title)
+                    .font(.system(size: layout.detailFontSize * 1.15, weight: .bold))
+                    .foregroundStyle(Color.primary.opacity(0.98))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            Spacer(minLength: 0)
+
+            if let quickJoinURL = event.quickJoinURL {
+                CalendarJoinButton(
+                    url: quickJoinURL,
+                    fontSize: layout.captionFontSize * 1.1,
+                    showsTitle: renderedSpan != .two
+                )
+            }
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    /// Small "2 ✉" pill in the tile corner while invitations wait for an answer.
+    @ViewBuilder
+    private func invitationCountBadge(layout: LayoutMetrics) -> some View {
+        let count = displayedInvitations.count
+        if count > 0 {
+            HStack(spacing: 2) {
+                Image(systemName: "envelope.fill")
+                Text("\(count)")
+            }
+            .font(.system(size: layout.captionFontSize * 0.9, weight: .bold, design: .rounded))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1.5)
+            .background(Capsule().fill(Color.orange))
+            .padding(layout.contentPadding * 0.45)
+            .accessibilityLabel("\(count) invitations waiting for an answer")
+        }
+    }
+
+    /// Start time for a tile row: "Now" while the event runs, the clock
+    /// time today, weekday plus time on later days.
+    private func compactTimeText(for event: CalendarEventSnapshot, now: Date) -> String {
+        let calendarRef = Calendar.autoupdatingCurrent
+        let isToday = calendarRef.isDate(event.startDate, inSameDayAs: now)
+
+        if event.isAllDay {
+            return isToday ? "All day" : "\(shortWeekdayFormatter.string(from: event.startDate)) · all day"
+        }
+
+        if event.startDate <= now {
+            return "Now · until \(timeFormatter.string(from: event.endDate))"
+        }
+
+        let time = timeFormatter.string(from: event.startDate)
+        if isToday {
+            let relative = relativeTimeText(for: event.startDate, now: now)
+            return relative.isEmpty ? time : "\(time) · \(relative)"
+        }
+
+        if calendarRef.isDateInTomorrow(event.startDate) {
+            return "Tomorrow \(time)"
+        }
+
+        return "\(shortWeekdayFormatter.string(from: event.startDate)) \(time)"
+    }
+
     @ViewBuilder
     private func expandedContent(layout: ExpandedLayoutMetrics, now: Date) -> some View {
         if calendar.permissionStatus != .granted {
@@ -241,8 +354,28 @@ struct CalendarWidgetTileView: View {
     private func expandedEventList(layout: ExpandedLayoutMetrics, now: Date) -> some View {
         let sections = expandedSections(now: now)
 
+        let invitations = displayedInvitations
+
         return ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: layout.sectionGroupSpacing) {
+                if !invitations.isEmpty {
+                    VStack(alignment: .leading, spacing: layout.eventRowSpacing) {
+                        Text("Invitations")
+                            .font(.system(size: layout.sectionTitleFontSize, weight: .semibold))
+                            .foregroundStyle(Color.orange)
+                            .tracking(0.5)
+                            .textCase(.uppercase)
+
+                        ForEach(invitations, id: \.eventIdentifier) { invitation in
+                            ExpandedInvitationRow(
+                                event: invitation,
+                                whenText: invitationWhenText(for: invitation, now: now),
+                                layout: layout
+                            )
+                        }
+                    }
+                }
+
                 ForEach(sections) { section in
                     VStack(alignment: .leading, spacing: layout.eventRowSpacing) {
                         Text(section.title)
@@ -254,7 +387,7 @@ struct CalendarWidgetTileView: View {
                         ForEach(Array(section.events.enumerated()), id: \.offset) { _, event in
                             ExpandedEventRow(
                                 event: event,
-                                scheduleText: expandedScheduleText(for: event, now: now),
+                                scheduleText: expandedAgendaText(for: event, now: now),
                                 layout: layout
                             )
                         }
@@ -298,6 +431,16 @@ struct CalendarWidgetTileView: View {
             return "Tomorrow"
         }
         return sectionDayFormatter.string(from: day)
+    }
+
+    /// "Tomorrow, 14:00 – 15:00 · from Priya" line under an invitation title.
+    private func invitationWhenText(for event: CalendarEventSnapshot, now: Date) -> String {
+        let day = sectionTitle(for: Calendar.autoupdatingCurrent.startOfDay(for: event.startDate), now: now)
+        var text = "\(day), \(expandedScheduleText(for: event, now: now))"
+        if !event.organizerName.isEmpty {
+            text += " · from \(event.organizerName)"
+        }
+        return text
     }
 
     private func headerDateText(for date: Date) -> String {
@@ -344,6 +487,20 @@ struct CalendarWidgetTileView: View {
         let start = timeFormatter.string(from: event.startDate)
         let end = timeFormatter.string(from: event.endDate)
         return "\(start) – \(end)"
+    }
+
+    /// Schedule line for an agenda row, with the user's answer appended
+    /// when the event is an invitation they have not plainly accepted.
+    private func expandedAgendaText(for event: CalendarEventSnapshot, now: Date) -> String {
+        let schedule = expandedScheduleText(for: event, now: now)
+        switch event.responseStatus {
+        case .pending:
+            return "\(schedule) · not answered"
+        case .tentative:
+            return "\(schedule) · maybe"
+        case .notInvited, .accepted, .declined:
+            return schedule
+        }
     }
 
     private var headerDateFormatter: DateFormatter {
@@ -401,17 +558,15 @@ struct CalendarWidgetTileView: View {
             Text(scheduleLine(for: event, now: now))
                 .lineLimit(1)
 
-            if let quickJoinURL = event.quickJoinURL {
-                Text("•")
-                Button(joinLabel(for: quickJoinURL)) {
-                    NSWorkspace.shared.open(quickJoinURL)
-                }
-                .buttonStyle(.plain)
-                .underline()
-                .lineLimit(1)
-            }
-
             Spacer(minLength: 0)
+
+            if let quickJoinURL = event.quickJoinURL {
+                CalendarJoinButton(
+                    url: quickJoinURL,
+                    fontSize: layout.captionFontSize,
+                    showsTitle: renderedSpan != .two
+                )
+            }
         }
         .font(.system(size: layout.detailFontSize, weight: .medium))
         .foregroundStyle(Color.primary.opacity(opacity))
@@ -695,6 +850,12 @@ private struct ExpandedEventRow: View {
                 }
 
                 Spacer(minLength: 0)
+
+                // Keeps the title clear of the join button, which sits in
+                // an overlay because a button cannot nest inside this one.
+                if event.quickJoinURL != nil {
+                    Color.clear.frame(width: joinButtonReservedWidth, height: 1)
+                }
             }
             .padding(.vertical, layout.eventRowVerticalPadding)
             .padding(.horizontal, layout.eventRowHorizontalPadding)
@@ -706,6 +867,12 @@ private struct ExpandedEventRow: View {
             .animation(.easeOut(duration: 0.12), value: isHovered)
         }
         .buttonStyle(.plain)
+        .overlay(alignment: .trailing) {
+            if let quickJoinURL = event.quickJoinURL {
+                CalendarJoinButton(url: quickJoinURL, fontSize: layout.eventDetailFontSize, showsTitle: true)
+                    .padding(.trailing, layout.eventRowHorizontalPadding)
+            }
+        }
         .onHover { isHovered = $0 }
         .contextMenu {
             Button("Open in Calendar") {
@@ -741,10 +908,154 @@ private struct ExpandedEventRow: View {
         }
     }
 
+    private var joinButtonReservedWidth: CGFloat {
+        layout.eventDetailFontSize * 4.6
+    }
+
     private func openInCalendar() {
-        guard let url = URL(string: "ical://ekevent/\(event.eventIdentifier)?method=show&options=more") else {
+        event.openInCalendar()
+    }
+}
+
+extension CalendarEventSnapshot {
+    /// Shows this event in Calendar.app, expanded to its detail popover.
+    func openInCalendar() {
+        guard let url = URL(string: "ical://ekevent/\(eventIdentifier)?method=show&options=more") else {
             return
         }
         NSWorkspace.shared.open(url)
+    }
+}
+
+/// Green "Join" pill that opens an event's video-call link.
+private struct CalendarJoinButton: View {
+    let url: URL
+    let fontSize: CGFloat
+    let showsTitle: Bool
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button {
+            NSWorkspace.shared.open(url)
+        } label: {
+            HStack(spacing: fontSize * 0.3) {
+                Image(systemName: "video.fill")
+                if showsTitle {
+                    Text("Join")
+                }
+            }
+            .font(.system(size: fontSize, weight: .bold, design: .rounded))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, fontSize * 0.7)
+            .padding(.vertical, fontSize * 0.35)
+            .background(Capsule().fill(Color.green.opacity(isHovered ? 1 : 0.86)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(url.host ?? url.absoluteString)
+        .accessibilityLabel("Join meeting")
+    }
+}
+
+/// One unanswered invitation with its Yes / Maybe / No buttons.
+private struct ExpandedInvitationRow: View {
+    let event: CalendarEventSnapshot
+    let whenText: String
+    let layout: ExpandedLayoutMetrics
+
+    /// The answer being written, so the row can dim until the calendar
+    /// refresh removes it from the list.
+    @State private var sentReply: CalendarInvitationReply?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: layout.eventRowGap) {
+            Button(action: { event.openInCalendar() }) {
+                HStack(alignment: .top, spacing: layout.eventRowGap) {
+                    RoundedRectangle(cornerRadius: layout.accentWidth / 2, style: .continuous)
+                        .fill(Color(nsColor: event.color).opacity(0.95))
+                        .frame(width: layout.accentWidth)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(event.title)
+                            .font(.system(size: layout.eventTitleFontSize, weight: .semibold))
+                            .foregroundStyle(Color.primary.opacity(0.96))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        Text(whenText)
+                            .font(.system(size: layout.eventDetailFontSize, weight: .medium))
+                            .foregroundStyle(Color.primary.opacity(0.66))
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            HStack(spacing: layout.eventRowGap) {
+                ForEach(CalendarInvitationReply.allCases) { reply in
+                    replyButton(for: reply)
+                }
+            }
+            .disabled(sentReply != nil)
+        }
+        .padding(.vertical, layout.eventRowVerticalPadding)
+        .padding(.horizontal, layout.eventRowHorizontalPadding)
+        .background(
+            RoundedRectangle(cornerRadius: layout.eventRowCornerRadius, style: .continuous)
+                .fill(Color.orange.opacity(0.1))
+        )
+        .opacity(sentReply == nil ? 1 : 0.55)
+        .animation(.easeOut(duration: 0.15), value: sentReply)
+    }
+
+    private func replyButton(for reply: CalendarInvitationReply) -> some View {
+        Button {
+            send(reply)
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: reply.symbolName)
+                Text(reply.title)
+            }
+            .font(.system(size: layout.eventDetailFontSize, weight: .bold, design: .rounded))
+            .foregroundStyle(tint(for: reply))
+            .lineLimit(1)
+            .padding(.vertical, layout.eventRowVerticalPadding * 0.8)
+            .frame(maxWidth: .infinity)
+            .background(Capsule().fill(tint(for: reply).opacity(sentReply == reply ? 0.34 : 0.16)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(helpText(for: reply))
+    }
+
+    private func tint(for reply: CalendarInvitationReply) -> Color {
+        switch reply {
+        case .accept: .green
+        case .maybe: .orange
+        case .decline: .red
+        }
+    }
+
+    private func helpText(for reply: CalendarInvitationReply) -> String {
+        switch reply {
+        case .accept: "Accept this invitation"
+        case .maybe: "Answer maybe"
+        case .decline: "Decline this invitation"
+        }
+    }
+
+    /// Writes the answer; when the calendar refuses it, hands the event to
+    /// Calendar.app so the user can still reply there.
+    private func send(_ reply: CalendarInvitationReply) {
+        sentReply = reply
+        if !CalendarService.shared.respond(to: event, with: reply) {
+            sentReply = nil
+            event.openInCalendar()
+        }
     }
 }

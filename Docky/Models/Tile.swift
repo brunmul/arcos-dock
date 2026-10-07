@@ -227,7 +227,11 @@ enum WidgetKind: Codable, Identifiable, Hashable {
         switch self {
         case .nowPlaying:
             WidgetExpansionExtent(widthTiles: 5, heightTiles: 2)
-        case .calendar, .calendarDate, .reminders, .batteries, .systemStatus, .weather, .search, .photoFrame:
+        case .calendar:
+            // Taller and wider than standard: the agenda shares the panel
+            // with the invitations list and its reply buttons.
+            WidgetExpansionExtent(widthTiles: 4, heightTiles: 4)
+        case .calendarDate, .reminders, .batteries, .systemStatus, .weather, .search, .photoFrame:
             .standard
         case .external(let identifier):
             ExternalWidgetRegistry.shared.metadata(for: identifier)?.expansionExtent ?? .standard

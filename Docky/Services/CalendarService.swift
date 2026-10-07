@@ -13,6 +13,9 @@ final class CalendarService: ObservableObject {
 
     @Published private(set) var nextEvent: CalendarEventSnapshot?
     @Published private(set) var upcomingEvents: [CalendarEventSnapshot] = []
+    /// Invitations the user has not answered yet, one row per event (a
+    /// recurring invitation is listed once, at its next occurrence).
+    @Published private(set) var pendingInvitations: [CalendarEventSnapshot] = []
     @Published private(set) var authorizationStatus: EKAuthorizationStatus
     @Published private(set) var isLoading = false
     @Published private(set) var lastErrorDescription: String?
@@ -86,6 +89,7 @@ final class CalendarService: ObservableObject {
         case .writeOnly:
             nextEvent = nil
             upcomingEvents = []
+            pendingInvitations = []
             isLoading = false
             lastErrorDescription = "Calendar read access is needed to show upcoming events."
         case .notDetermined:
@@ -94,15 +98,18 @@ final class CalendarService: ObservableObject {
             // call-to-action state until the user opts in.
             nextEvent = nil
             upcomingEvents = []
+            pendingInvitations = []
             isLoading = false
         case .denied, .restricted:
             nextEvent = nil
             upcomingEvents = []
+            pendingInvitations = []
             isLoading = false
             lastErrorDescription = "Enable Calendar access in Settings to show upcoming events."
         @unknown default:
             nextEvent = nil
             upcomingEvents = []
+            pendingInvitations = []
             isLoading = false
             lastErrorDescription = "Calendar is unavailable right now."
         }
@@ -166,15 +173,72 @@ final class CalendarService: ObservableObject {
                 return $0.startDate < $1.startDate
             }
 
-        let nextEvent = upcomingEvents.first(where: { !$0.isAllDay }) ?? upcomingEvents.first
+        // Declined invitations stay out of the "up next" surfaces; they are
+        // still in Calendar, but the user already said they are not going.
+        let attendingEvents = upcomingEvents.filter {
+            CalendarEventSnapshot.responseStatus(for: $0) != .declined
+        }
+        let nextEvent = attendingEvents.first(where: { !$0.isAllDay }) ?? attendingEvents.first
+
+        var seenInvitationIdentifiers = Set<String>()
+        let invitationEvents = upcomingEvents.filter { event in
+            guard CalendarEventSnapshot.responseStatus(for: event) == .pending else { return false }
+            let identifier = event.eventIdentifier ?? event.calendarItemIdentifier
+            return seenInvitationIdentifiers.insert(identifier).inserted
+        }
 
         self.nextEvent = nextEvent.map(CalendarEventSnapshot.init(event:))
         // Deeper window so per-widget calendar filtering still has events after exclusions.
-        self.upcomingEvents = upcomingEvents.prefix(20).map(CalendarEventSnapshot.init(event:))
+        self.upcomingEvents = attendingEvents.prefix(20).map(CalendarEventSnapshot.init(event:))
+        self.pendingInvitations = invitationEvents.prefix(10).map(CalendarEventSnapshot.init(event:))
         self.lastRefreshDate = now
         self.isLoading = false
         self.lastErrorDescription = nil
         scheduleRollover(after: nextEvent?.endDate)
+    }
+
+    /// Answers an invitation on the user's behalf. Returns `false` when the
+    /// reply could not be written (no access, event gone, or this macOS
+    /// version no longer exposes the setter) so the caller can fall back to
+    /// opening the event in Calendar.
+    @discardableResult
+    func respond(to snapshot: CalendarEventSnapshot, with reply: CalendarInvitationReply) -> Bool {
+        guard permissionStatus == .granted,
+              let event = resolveEvent(for: snapshot),
+              CalendarInvitationResponder.apply(reply.participantStatus, to: event) else {
+            return false
+        }
+
+        do {
+            // A recurring invitation is answered for the whole series from
+            // the listed occurrence on, which is what Calendar does too.
+            let span: EKSpan = event.hasRecurrenceRules ? .futureEvents : .thisEvent
+            try eventStore.save(event, span: span, commit: true)
+        } catch {
+            eventStore.reset()
+            lastErrorDescription = error.localizedDescription
+            refresh(force: true)
+            return false
+        }
+
+        refresh(force: true)
+        return true
+    }
+
+    /// Finds the live `EKEvent` behind a snapshot. Matches on the occurrence
+    /// start date first because `event(withIdentifier:)` only ever returns
+    /// the first occurrence of a recurring event.
+    private func resolveEvent(for snapshot: CalendarEventSnapshot) -> EKEvent? {
+        let predicate = eventStore.predicateForEvents(
+            withStart: snapshot.startDate.addingTimeInterval(-60),
+            end: max(snapshot.endDate, snapshot.startDate).addingTimeInterval(60),
+            calendars: nil
+        )
+        let occurrence = eventStore.events(matching: predicate).first { event in
+            (event.eventIdentifier ?? event.calendarItemIdentifier) == snapshot.eventIdentifier
+                && abs(event.startDate.timeIntervalSince(snapshot.startDate)) < 1
+        }
+        return occurrence ?? eventStore.event(withIdentifier: snapshot.eventIdentifier)
     }
 
     private func scheduleRollover(after endDate: Date?) {
@@ -249,8 +313,22 @@ final class CalendarService: ObservableObject {
             quickJoinURL: nil
         )
 
+        let dummyInvitation = CalendarEventSnapshot(
+            title: "Design critique",
+            startDate: calendar.date(byAdding: .day, value: 1, to: now)?.addingTimeInterval(7_200) ?? now.addingTimeInterval(93_600),
+            endDate: calendar.date(byAdding: .day, value: 1, to: now)?.addingTimeInterval(10_800) ?? now.addingTimeInterval(97_200),
+            isAllDay: false,
+            location: "",
+            calendarTitle: "Work",
+            color: NSColor.systemPurple,
+            quickJoinURL: URL(string: "https://meet.google.com/abc-defg-hij"),
+            responseStatus: .pending,
+            organizerName: "Priya"
+        )
+
         nextEvent = next
-        upcomingEvents = [next, dummyTwo, dummyThree, dummyFour]
+        upcomingEvents = [next, dummyTwo, dummyThree, dummyInvitation, dummyFour]
+        pendingInvitations = [dummyInvitation]
         lastRefreshDate = now
         isLoading = false
         lastErrorDescription = nil
@@ -267,6 +345,72 @@ struct CalendarChoice: Identifiable, Equatable {
     var id: String { identifier }
 }
 
+/// The current user's answer to an event they were invited to.
+enum CalendarResponseStatus: String, Equatable {
+    /// Not an invitation: the user owns the event or it has no attendees.
+    case notInvited
+    case pending
+    case accepted
+    case tentative
+    case declined
+}
+
+/// The three answers the calendar widget offers for an invitation.
+enum CalendarInvitationReply: String, CaseIterable, Identifiable {
+    case accept
+    case maybe
+    case decline
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .accept: String(localized: "Yes")
+        case .maybe: String(localized: "Maybe")
+        case .decline: String(localized: "No")
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .accept: "checkmark"
+        case .maybe: "questionmark"
+        case .decline: "xmark"
+        }
+    }
+
+    var participantStatus: EKParticipantStatus {
+        switch self {
+        case .accept: .accepted
+        case .maybe: .tentative
+        case .decline: .declined
+        }
+    }
+}
+
+/// EventKit can read the user's answer to an invitation but has no public
+/// way to change it. Calendar itself goes through a setter on `EKEvent`
+/// that is not in the SDK headers; this looks that setter up at runtime
+/// and reports `false` when it is missing, so a future macOS that removes
+/// it degrades to "open the event in Calendar" instead of crashing.
+enum CalendarInvitationResponder {
+    private typealias StatusSetter = @convention(c) (AnyObject, Selector, Int) -> Void
+
+    nonisolated static func apply(_ status: EKParticipantStatus, to event: EKEvent) -> Bool {
+        for selectorName in ["setParticipationStatus:", "setSelfParticipantStatus:"] {
+            let selector = NSSelectorFromString(selectorName)
+            guard event.responds(to: selector),
+                  let implementation = event.method(for: selector) else {
+                continue
+            }
+            let setter = unsafeBitCast(implementation, to: StatusSetter.self)
+            setter(event, selector, status.rawValue)
+            return true
+        }
+        return false
+    }
+}
+
 struct CalendarEventSnapshot: Equatable {
     let eventIdentifier: String
     let calendarIdentifier: String
@@ -278,6 +422,9 @@ struct CalendarEventSnapshot: Equatable {
     let calendarTitle: String
     let color: NSColor
     let quickJoinURL: URL?
+    let responseStatus: CalendarResponseStatus
+    /// Display name of whoever sent the invitation; empty when unknown.
+    let organizerName: String
 
     nonisolated init(event: EKEvent) {
         eventIdentifier = event.eventIdentifier ?? event.calendarItemIdentifier
@@ -291,6 +438,31 @@ struct CalendarEventSnapshot: Equatable {
         calendarTitle = event.calendar.title
         color = NSColor(cgColor: event.calendar.cgColor) ?? .white
         quickJoinURL = Self.resolveQuickJoinURL(for: event, location: location)
+        responseStatus = Self.responseStatus(for: event)
+        organizerName = event.organizer?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    /// The user's own answer on `event`, read from the attendee EventKit
+    /// flags as the current user. Events the user organizes, and events
+    /// with no attendee list, are not invitations.
+    nonisolated static func responseStatus(for event: EKEvent) -> CalendarResponseStatus {
+        guard event.organizer?.isCurrentUser != true,
+              let selfAttendee = event.attendees?.first(where: { $0.isCurrentUser }) else {
+            return .notInvited
+        }
+
+        switch selfAttendee.participantStatus {
+        case .pending:
+            return .pending
+        case .accepted:
+            return .accepted
+        case .tentative:
+            return .tentative
+        case .declined:
+            return .declined
+        default:
+            return .notInvited
+        }
     }
 
     #if DEBUG
@@ -304,7 +476,9 @@ struct CalendarEventSnapshot: Equatable {
         location: String,
         calendarTitle: String,
         color: NSColor,
-        quickJoinURL: URL?
+        quickJoinURL: URL?,
+        responseStatus: CalendarResponseStatus = .notInvited,
+        organizerName: String = ""
     ) {
         self.eventIdentifier = eventIdentifier
         self.calendarIdentifier = calendarIdentifier
@@ -316,6 +490,8 @@ struct CalendarEventSnapshot: Equatable {
         self.calendarTitle = calendarTitle
         self.color = color
         self.quickJoinURL = quickJoinURL
+        self.responseStatus = responseStatus
+        self.organizerName = organizerName
     }
     #endif
 
