@@ -274,18 +274,16 @@ struct SidebarFolderTileView: View {
 
         Button(action: action) {
             Image(systemName: glyph.outlineSymbol)
-                .font(.system(size: 14, weight: .regular))
+                .font(.system(size: 13, weight: .light))
+                .symbolRenderingMode(.monochrome)
                 .foregroundStyle(tint)
-                // Deepened on a light sidebar, lifted on a dark one, so the
-                // line stays readable on a wash of the same hue.
-                .brightness(colorScheme == .dark ? 0.12 : -0.18)
                 .frame(maxWidth: .infinity)
                 .frame(height: SidebarMetrics.tileHeight)
                 .background(shape.fill(tint.opacity(washOpacity)))
                 .overlay {
                     // The open folder is ringed in its own color rather
                     // than turned into the white pill of a current app.
-                    shape.strokeBorder(tint.opacity(isCurrent ? 0.75 : 0), lineWidth: 1.5)
+                    shape.strokeBorder(tint.opacity(isCurrent ? 0.55 : 0), lineWidth: 1)
                 }
                 .contentShape(Rectangle())
         }
@@ -301,11 +299,14 @@ struct SidebarFolderTileView: View {
         }
     }
 
+    /// A faint wash: enough to tell the folders from the app tiles beside
+    /// them, not enough to compete with the app icons.
     private var washOpacity: Double {
+        let base = colorScheme == .dark ? 0.2 : 0.12
         if isCurrent {
-            return 0.3
+            return base + 0.08
         }
-        return isHovered ? 0.26 : 0.17
+        return isHovered ? base + 0.06 : base
     }
 
     private var contextActions: [ContextAction] {
@@ -543,7 +544,7 @@ struct SidebarSymbolTile: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 13, weight: .light))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity)
                 .frame(height: SidebarMetrics.tileHeight)
@@ -581,7 +582,8 @@ struct SidebarTrashTile: View {
 // MARK: - Open apps
 
 /// One open app, the sidebar's "tab". Clicking the row brings the app
-/// forward; the chevron on the right unfolds its windows underneath.
+/// forward; the chevron that appears on the right while the pointer is on
+/// the row unfolds its windows underneath.
 struct SidebarOpenAppSection: View {
     let app: RunningApp
     let windows: [AppWindow]
@@ -657,8 +659,9 @@ struct SidebarOpenAppSection: View {
         }
     }
 
-    /// Right side of the row: the quit button under the pointer, otherwise
-    /// the unread badge; then the chevron when the app has windows to show.
+    /// Right side of the row. At rest, only the unread badge. Under the
+    /// pointer, the quit button and, when the app has windows to show, the
+    /// chevron that unfolds them.
     @ViewBuilder
     private var trailing: some View {
         HStack(spacing: 2) {
@@ -670,7 +673,9 @@ struct SidebarOpenAppSection: View {
                 SidebarBadge(text: badge)
             }
 
-            if !windows.isEmpty {
+            // Only under the pointer: a chevron on every row is a column
+            // of noise down the side of the list.
+            if !windows.isEmpty, isHovered {
                 Button {
                     withAnimation(SidebarMetrics.foldAnimation) {
                         sidebar.toggleExpansion(ofApp: app.bundleIdentifier)

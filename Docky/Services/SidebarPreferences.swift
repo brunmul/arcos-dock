@@ -144,17 +144,29 @@ struct SidebarFolderGlyph: Codable, Equatable {
             rawValue.capitalized
         }
 
+        /// Muted, earthy inks rather than the system's signal colors: the
+        /// tiles sit next to app icons all day and should not shout. Each
+        /// is a little lighter on a dark sidebar so the line stays legible.
         var nsColor: NSColor {
+            let (red, green, blue) = components
+            let light = NSColor(srgbRed: red, green: green, blue: blue, alpha: 1)
+            let dark = light.blended(withFraction: 0.42, of: .white) ?? light
+            return NSColor(name: nil) { appearance in
+                appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+            }
+        }
+
+        private var components: (CGFloat, CGFloat, CGFloat) {
             switch self {
-            case .gray: .systemGray
-            case .blue: .systemBlue
-            case .purple: .systemPurple
-            case .pink: .systemPink
-            case .red: .systemRed
-            case .orange: .systemOrange
-            case .yellow: .systemYellow
-            case .green: .systemGreen
-            case .teal: .systemTeal
+            case .gray: (0.42, 0.42, 0.44)
+            case .blue: (0.29, 0.41, 0.55)
+            case .purple: (0.47, 0.34, 0.58)
+            case .pink: (0.68, 0.29, 0.44)
+            case .red: (0.62, 0.30, 0.25)
+            case .orange: (0.66, 0.40, 0.24)
+            case .yellow: (0.58, 0.45, 0.20)
+            case .green: (0.36, 0.48, 0.28)
+            case .teal: (0.24, 0.48, 0.47)
             }
         }
     }
@@ -170,34 +182,40 @@ struct SidebarFolderGlyph: Codable, Equatable {
     }
 
     /// The symbols offered in the folder's menu, with the name shown there.
+    /// Every one is drawn in outline only, with no filled part, so the set
+    /// reads as one family at a light weight.
     static let choices: [(symbol: String, title: String)] = [
         ("folder", "Folder"),
         ("square.grid.2x2", "Apps"),
         ("wrench.and.screwdriver", "Tools"),
-        ("sparkles", "Sparkles"),
+        ("wand.and.rays", "Magic"),
+        ("lightbulb", "Ideas"),
         ("bubble.left.and.bubble.right", "Chat"),
-        ("play.rectangle", "Media"),
-        ("music.note", "Music"),
+        ("paperplane", "Send"),
+        ("film", "Video"),
+        ("headphones", "Audio"),
         ("camera", "Camera"),
         ("photo", "Photos"),
         ("paintpalette", "Design"),
-        ("pencil.and.outline", "Writing"),
+        ("pencil", "Writing"),
         ("doc.text", "Documents"),
         ("book", "Reading"),
         ("chevron.left.forwardslash.chevron.right", "Code"),
+        ("terminal", "Terminal"),
         ("flask", "Lab"),
         ("chart.bar", "Data"),
         ("briefcase", "Work"),
+        ("calendar", "Calendar"),
         ("clock", "Time"),
         ("display", "Desktop"),
-        ("arrow.down.circle", "Downloads"),
+        ("tray.and.arrow.down", "Downloads"),
         ("globe", "Web"),
         ("cart", "Shopping"),
         ("gamecontroller", "Games"),
         ("house", "Home"),
         ("heart", "Favorites"),
         ("star", "Star"),
-        ("lightbulb", "Ideas"),
+        ("bookmark", "Bookmark"),
         ("lock", "Private")
     ]
 
@@ -206,18 +224,18 @@ struct SidebarFolderGlyph: Codable, Equatable {
     static func suggested(forName name: String) -> SidebarFolderGlyph {
         let lowered = name.lowercased()
         let rules: [(keywords: [String], symbol: String, tint: Tint)] = [
-            (["util", "outil", "tool", "system", "système"], "wrench.and.screwdriver", .teal),
-            (["media", "média", "video", "vidéo", "film"], "play.rectangle", .red),
-            (["ai", "ia", "intelligence"], "sparkles", .orange),
-            (["com", "chat", "message", "social", "mail"], "bubble.left.and.bubble.right", .green),
+            (["util", "outil", "tool", "system", "système"], "wrench.and.screwdriver", .gray),
+            (["media", "média", "video", "vidéo", "film"], "film", .red),
+            (["ai", "ia", "intelligence"], "wand.and.rays", .orange),
+            (["com", "chat", "message", "social", "mail"], "bubble.left.and.bubble.right", .teal),
             (["bureau", "desktop"], "display", .blue),
             (["app"], "square.grid.2x2", .purple),
-            (["download", "télécharg", "telecharg"], "arrow.down.circle", .pink),
+            (["download", "télécharg", "telecharg"], "tray.and.arrow.down", .yellow),
             (["doc"], "doc.text", .blue),
-            (["music", "musique", "audio"], "music.note", .pink),
+            (["music", "musique", "audio"], "headphones", .pink),
             (["photo", "image", "picture"], "photo", .teal),
-            (["design", "créa", "crea"], "paintpalette", .purple),
-            (["dev", "code"], "chevron.left.forwardslash.chevron.right", .orange),
+            (["design", "créa", "crea"], "paintpalette", .red),
+            (["dev", "code"], "chevron.left.forwardslash.chevron.right", .pink),
             (["game", "jeu"], "gamecontroller", .purple),
             (["work", "travail", "pro"], "briefcase", .orange)
         ]
