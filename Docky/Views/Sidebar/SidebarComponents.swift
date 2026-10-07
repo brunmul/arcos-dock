@@ -729,36 +729,38 @@ struct SidebarOpenAppSection: View {
     }
 
     /// Right side of the row. At rest, only the unread badge. Under the
-    /// pointer, the quit button and, when the app has windows to show, the
-    /// chevron that unfolds them.
+    /// pointer: the chevron that unfolds the app's windows, when it has
+    /// any, then the quit button at the very end, where a close button is
+    /// expected.
     @ViewBuilder
     private var trailing: some View {
         HStack(spacing: 2) {
             if isHovered {
+                // Only under the pointer: a chevron on every row is a
+                // column of noise down the side of the list. It points
+                // down, the way the windows unfold, and up once they have.
+                if !windows.isEmpty {
+                    Button {
+                        withAnimation(SidebarMetrics.foldAnimation) {
+                            sidebar.toggleExpansion(ofApp: app.bundleIdentifier)
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(isOpen ? 180 : 0))
+                            .frame(width: 18, height: 18)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(isOpen ? "Hide windows" : "Show windows")
+                }
+
                 SidebarRowButton(systemName: "xmark", help: "Quit \(app.localizedName)") {
                     workspace.quit(bundleIdentifier: app.bundleIdentifier)
                 }
             } else if preferences.showsAppBadges, let badge = badges.badge(forBundleIdentifier: app.bundleIdentifier) {
                 SidebarBadge(text: badge)
-            }
-
-            // Only under the pointer: a chevron on every row is a column
-            // of noise down the side of the list.
-            if !windows.isEmpty, isHovered {
-                Button {
-                    withAnimation(SidebarMetrics.foldAnimation) {
-                        sidebar.toggleExpansion(ofApp: app.bundleIdentifier)
-                    }
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isOpen ? 90 : 0))
-                        .frame(width: 18, height: 18)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(isOpen ? "Hide windows" : "Show windows")
             }
         }
     }
