@@ -59,7 +59,7 @@ struct SidebarAppIcon: View {
             SidebarPackIconView(icon: packIcon, ink: Self.ink)
                 .frame(width: size, height: size)
         } else if sidebar.usesWebsiteIcons, let favicon = favicons.icon(forBundleIdentifier: bundleIdentifier) {
-            SidebarPackIconView(icon: favicon, ink: Self.ink)
+            SidebarPackIconView(icon: favicon, ink: faviconInk(for: favicon))
                 .frame(width: size, height: size)
         } else if sidebar.usesTintedIcons, let glyph = SidebarIconGlyph.glyph(for: image, key: glyphKey) {
             Image(nsImage: glyph.image)
@@ -76,6 +76,15 @@ struct SidebarAppIcon: View {
                 .aspectRatio(contentMode: .fit)
                 .frame(width: size, height: size)
         }
+    }
+
+    /// A one-color website icon takes the main color of the app's own
+    /// icon (Spotify green, WhatsApp green), as the cut-out glyphs do.
+    private func faviconInk(for favicon: SidebarPackIcon) -> Color {
+        guard favicon.isGlyph, sidebar.usesTintedIcons,
+              let tint = SidebarIconGlyph.glyph(for: image, key: glyphKey)?.tint
+        else { return Self.ink }
+        return Color(nsColor: tint)
     }
 
     private var overrideURL: URL? {
