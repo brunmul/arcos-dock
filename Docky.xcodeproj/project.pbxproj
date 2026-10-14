@@ -415,7 +415,6 @@
 				CURRENT_PROJECT_VERSION = 202607010;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
-				OTHER_CODE_SIGN_FLAGS = "--requirements $(SRCROOT)/Config/DevDesignated.rqset";
 				ENABLE_APPLE_EVENTS = YES;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -454,6 +453,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.8.0;
+				OTHER_CODE_SIGN_FLAGS = "--requirements $(SRCROOT)/Config/DevDesignated.rqset";
 				PRODUCT_BUNDLE_IDENTIFIER = gt.quintero.Docky;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

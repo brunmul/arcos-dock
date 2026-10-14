@@ -21,15 +21,65 @@ final class SidebarPreferences: ObservableObject {
     static let fullWidth: CGFloat = 200
     /// Width of the compact sidebar, the icon-only rail.
     static let railWidth: CGFloat = 52
+    /// Height of the bar along the bottom of the screen, in both forms.
+    static let bottomHeight: CGFloat = 46
     /// Radius of the concave corners drawn where the sidebar meets the
     /// rest of the screen.
-    static let cornerRadius: CGFloat = 12
+    static let cornerRadius: CGFloat = 16
 
     /// Whether Docky shows the sidebar instead of the dock strip. Change it
     /// through `SidebarWindowController.setSidebarMode(_:)`, which also
     /// swaps the two windows.
     @Published var isEnabled: Bool {
         didSet { defaults.set(isEnabled, forKey: Keys.isEnabled) }
+    }
+
+    /// Where the bar sits: down the left edge (the sidebar) or along the
+    /// bottom of the screen, where it lays the same content out in a row.
+    @Published var edge: SidebarEdge {
+        didSet { defaults.set(edge.rawValue, forKey: Keys.edge) }
+    }
+
+    var isBottom: Bool { edge == .bottom }
+
+    /// The bar's colors (`SidebarTheme`): "claude" for the warm paper and
+    /// charcoal that follow the system, or one of the Slack-like themes.
+    @Published var themeID: String {
+        didSet { defaults.set(themeID, forKey: Keys.themeID) }
+    }
+
+    /// Sets the desktop picture to the theme's colors, so the menu bar and
+    /// the desktop around the windows match the bar (`SidebarWallpaper`).
+    @Published var matchesWallpaper: Bool {
+        didSet { defaults.set(matchesWallpaper, forKey: Keys.matchesWallpaper) }
+    }
+
+    var theme: SidebarTheme {
+        SidebarTheme.all.first { $0.id == themeID } ?? .claude
+    }
+
+    /// Parts left out of the bar along the bottom and of the compact rail,
+    /// where room is short. The full sidebar always shows everything.
+    @Published var hiddenSections: Set<SidebarSection> {
+        didSet { defaults.set(hiddenSections.map(\.rawValue), forKey: Keys.hiddenSections) }
+    }
+
+    /// Down the left side: the open apps and tabs come up in a panel when
+    /// the pointer reaches the bottom of the screen, to switch between them.
+    @Published var showsBottomSwitcher: Bool {
+        didSet { defaults.set(showsBottomSwitcher, forKey: Keys.showsBottomSwitcher) }
+    }
+
+    func shows(_ section: SidebarSection) -> Bool {
+        !hiddenSections.contains(section)
+    }
+
+    func setShows(_ section: SidebarSection, _ shows: Bool) {
+        if shows {
+            hiddenSections.remove(section)
+        } else {
+            hiddenSections.insert(section)
+        }
     }
 
     /// Pinned: always on screen. Unpinned: hidden until the pointer reaches
@@ -54,6 +104,18 @@ final class SidebarPreferences: ObservableObject {
     /// can be found, in place of the app's own icon (`SidebarFaviconStore`).
     @Published var usesWebsiteIcons: Bool {
         didSet { defaults.set(usesWebsiteIcons, forKey: Keys.usesWebsiteIcons) }
+    }
+
+    /// Lists the pinned apps that are open in the Apps group as well, and
+    /// not only as tiles at the top.
+    @Published var showsPinnedAppsInOpenList: Bool {
+        didSet { defaults.set(showsPinnedAppsInOpenList, forKey: Keys.showsPinnedAppsInOpenList) }
+    }
+
+    /// Shows the Trash tile among the folders. The dock always keeps a
+    /// Trash, so this is the sidebar's own choice.
+    @Published var showsTrash: Bool {
+        didSet { defaults.set(showsTrash, forKey: Keys.showsTrash) }
     }
 
     /// Width of the panel in the current mode.
@@ -82,14 +144,47 @@ final class SidebarPreferences: ObservableObject {
         }
     }
 
+    /// Websites pinned among the apps at the top, in pinning order.
+    @Published var pinnedSites: [SidebarPinnedSite] {
+        didSet {
+            if let data = try? JSONEncoder().encode(pinnedSites) {
+                defaults.set(data, forKey: Keys.pinnedSites)
+            }
+        }
+    }
+
+    /// The pinned site a page belongs to, if any.
+    func pinnedSite(for pageURL: URL?) -> SidebarPinnedSite? {
+        pinnedSites.first { $0.matches(pageURL) }
+    }
+
+    /// Pins the page itself: a root page pins the whole site, a deeper one
+    /// (an artifact, a project) just that page and what is under it.
+    func pin(site url: URL, title: String) {
+        guard SidebarPinnedSite.host(of: url) != nil, pinnedSite(for: url) == nil else { return }
+        pinnedSites.append(SidebarPinnedSite(url: url, title: title))
+    }
+
+    func unpin(_ site: SidebarPinnedSite) {
+        pinnedSites.removeAll { $0.id == site.id }
+    }
+
     private let defaults = UserDefaults.standard
 
     private enum Keys {
+        static let pinnedSites = "docky.fork.sidebar.pinnedSites"
+        static let edge = "docky.fork.sidebar.edge"
+        static let themeID = "docky.fork.sidebar.theme"
+        static let matchesWallpaper = "docky.fork.sidebar.matchesWallpaper"
+        static let hiddenSections = "docky.fork.sidebar.hiddenSections"
         static let isEnabled = "docky.fork.sidebar.isEnabled"
         static let isPinned = "docky.fork.sidebar.isPinned"
         static let isCompact = "docky.fork.sidebar.isCompact"
         static let usesTintedIcons = "docky.fork.sidebar.usesTintedIcons"
         static let usesWebsiteIcons = "docky.fork.sidebar.usesWebsiteIcons"
+        static let showsPinnedAppsInOpenList = "docky.fork.sidebar.showsPinnedAppsInOpenList"
+        static let showsTrash = "docky.fork.sidebar.showsTrash"
+        static let showsBottomSwitcher = "docky.fork.sidebar.showsBottomSwitcher"
         static let expandedApps = "docky.fork.sidebar.expandedApps"
         static let openFolder = "docky.fork.sidebar.openFolder"
         static let folderGlyphs = "docky.fork.sidebar.folderGlyphs"
@@ -98,12 +193,25 @@ final class SidebarPreferences: ObservableObject {
     private init() {
         let defaults = UserDefaults.standard
         isEnabled = defaults.object(forKey: Keys.isEnabled) as? Bool ?? true
+        edge = defaults.string(forKey: Keys.edge).flatMap(SidebarEdge.init(rawValue:)) ?? .left
+        themeID = defaults.string(forKey: Keys.themeID) ?? SidebarTheme.claude.id
+        matchesWallpaper = defaults.object(forKey: Keys.matchesWallpaper) as? Bool ?? true
+        hiddenSections = Set((defaults.stringArray(forKey: Keys.hiddenSections) ?? []).compactMap(SidebarSection.init(rawValue:)))
         isPinned = defaults.object(forKey: Keys.isPinned) as? Bool ?? true
         isCompact = defaults.bool(forKey: Keys.isCompact)
         usesTintedIcons = defaults.object(forKey: Keys.usesTintedIcons) as? Bool ?? true
         usesWebsiteIcons = defaults.object(forKey: Keys.usesWebsiteIcons) as? Bool ?? true
+        showsPinnedAppsInOpenList = defaults.object(forKey: Keys.showsPinnedAppsInOpenList) as? Bool ?? true
+        showsTrash = defaults.object(forKey: Keys.showsTrash) as? Bool ?? true
+        showsBottomSwitcher = defaults.object(forKey: Keys.showsBottomSwitcher) as? Bool ?? true
         expandedAppIdentifiers = Set(defaults.stringArray(forKey: Keys.expandedApps) ?? [])
         openFolderIdentifier = defaults.string(forKey: Keys.openFolder)
+        if let data = defaults.data(forKey: Keys.pinnedSites),
+           let stored = try? JSONDecoder().decode([SidebarPinnedSite].self, from: data) {
+            pinnedSites = stored
+        } else {
+            pinnedSites = []
+        }
         if let data = defaults.data(forKey: Keys.folderGlyphs),
            let stored = try? JSONDecoder().decode([String: SidebarFolderGlyph].self, from: data) {
             folderGlyphs = stored
@@ -142,6 +250,86 @@ final class SidebarPreferences: ObservableObject {
         var glyph = glyph(forFolder: identifier, named: name)
         glyph.tint = color
         folderGlyphs[identifier] = glyph
+    }
+}
+
+enum SidebarEdge: String, CaseIterable {
+    case left
+    case bottom
+}
+
+/// A color theme for the bar, in the manner of Slack's: a light gradient
+/// from the top color to the bottom one, with light text on the dark ones.
+/// The colors come from Slack's theme swatches, the dark ones deepened for
+/// a sidebar. "Claude" is the bar's own warm paper and charcoal, which
+/// follow the system's light or dark mode.
+struct SidebarTheme: Identifiable, Equatable {
+    let id: String
+    let name: String
+    /// sRGB, as 0xRRGGBB.
+    let top: Int
+    let bottom: Int
+    let isDark: Bool
+
+    var isClaude: Bool { id == Self.claude.id }
+
+    static let claude = SidebarTheme(id: "claude", name: "Claude", top: 0xF5F4ED, bottom: 0xF5F4ED, isDark: false)
+
+    static let all: [SidebarTheme] = [
+        claude,
+        SidebarTheme(id: "kind-of-blue", name: "Kind of Blue", top: 0x96C4EC, bottom: 0x4676A1, isDark: false),
+        SidebarTheme(id: "funky-fresh", name: "Funky Fresh", top: 0xC4BEF7, bottom: 0x82C8AC, isDark: false),
+        SidebarTheme(id: "jazz-club", name: "Jazz Club", top: 0x701B1A, bottom: 0x331134, isDark: true),
+        SidebarTheme(id: "electric-fusion", name: "Electric Fusion", top: 0xE0F1A3, bottom: 0xB6F9B2, isDark: false),
+        SidebarTheme(id: "brassy", name: "Brassy", top: 0xEBD47B, bottom: 0xC2A94F, isDark: false),
+        SidebarTheme(id: "sunglasses-inside", name: "Sunglasses Inside", top: 0x2F1236, bottom: 0x220926, isDark: true),
+        SidebarTheme(id: "aubergine", name: "Aubergine", top: 0x391742, bottom: 0x29092E, isDark: true),
+        SidebarTheme(id: "clementine", name: "Clementine", top: 0x833B17, bottom: 0x7F3612, isDark: true),
+        SidebarTheme(id: "banana", name: "Banana", top: 0xFDF5C5, bottom: 0xF8D854, isDark: false),
+        SidebarTheme(id: "jade", name: "Jade", top: 0x2C5B42, bottom: 0x26513E, isDark: true),
+        SidebarTheme(id: "lagoon", name: "Lagoon", top: 0x204868, bottom: 0x1E344B, isDark: true),
+        SidebarTheme(id: "barbra", name: "Barbra", top: 0xF6CEDE, bottom: 0xEE88AB, isDark: false),
+        SidebarTheme(id: "gray", name: "Gray", top: 0xECECEC, bottom: 0xCBCCCF, isDark: false),
+        SidebarTheme(id: "mood-indigo", name: "Mood Indigo", top: 0x17215A, bottom: 0x0A154C, isDark: true),
+        SidebarTheme(id: "tritanopia", name: "Tritanopia", top: 0x2F2F2F, bottom: 0x000000, isDark: true),
+        SidebarTheme(id: "protanopia", name: "Protanopia", top: 0x423247, bottom: 0x210429, isDark: true),
+        SidebarTheme(id: "raspberry-beret", name: "Raspberry Beret", top: 0xF1DEFB, bottom: 0xEE87AA, isDark: false),
+        SidebarTheme(id: "big-business", name: "Big Business", top: 0x3C3C3F, bottom: 0x1D2A6E, isDark: true),
+        SidebarTheme(id: "pog", name: "POG", top: 0xF2D9E4, bottom: 0xE2B447, isDark: false),
+        SidebarTheme(id: "mint-chip", name: "Mint Chip", top: 0xD1EDBB, bottom: 0x8499E6, isDark: false),
+        SidebarTheme(id: "pbandj", name: "PB&J", top: 0xE4D5C2, bottom: 0xD69BB8, isDark: false),
+        SidebarTheme(id: "chill-vibes", name: "Chill Vibes", top: 0x2D5C43, bottom: 0x214752, isDark: true),
+        SidebarTheme(id: "forest-floor", name: "Forest Floor", top: 0x445719, bottom: 0x4D3618, isDark: true),
+        SidebarTheme(id: "slackr", name: "Slackr", top: 0xF6CFE0, bottom: 0x6AC3ED, isDark: false),
+        SidebarTheme(id: "sea-glass", name: "Sea Glass", top: 0xC4EEF1, bottom: 0xD4A5F0, isDark: false),
+        SidebarTheme(id: "lemon-lime", name: "Lemon Lime", top: 0x7C621B, bottom: 0x26500F, isDark: true),
+        SidebarTheme(id: "falling-leaves", name: "Falling Leaves", top: 0x553C20, bottom: 0x6A5416, isDark: true),
+        SidebarTheme(id: "sunrise", name: "Sunrise", top: 0xFBE8DD, bottom: 0xF1A9C3, isDark: false),
+        SidebarTheme(id: "choco-mint", name: "Choco Mint", top: 0x493219, bottom: 0x204233, isDark: true),
+        SidebarTheme(id: "cmyk", name: "CMYK", top: 0xBCEBFC, bottom: 0xEB8BAE, isDark: false),
+        SidebarTheme(id: "haberdashery", name: "Haberdashery", top: 0x19354F, bottom: 0x3A2E0B, isDark: true),
+        SidebarTheme(id: "hoth", name: "Hoth", top: 0xF9F9F9, bottom: 0xB3E8FB, isDark: false),
+        SidebarTheme(id: "ochin", name: "Ochin", top: 0x1F4167, bottom: 0x16305B, isDark: true),
+        SidebarTheme(id: "sweet-treat", name: "Sweet Treat", top: 0xF9DDDC, bottom: 0xF0A298, isDark: false),
+    ]
+}
+
+/// The parts of the bar that can be left out where room is short.
+enum SidebarSection: String, CaseIterable {
+    case pinned
+    case folders
+    case openApps
+    case tabs
+    case widgets
+
+    var title: String {
+        switch self {
+        case .pinned: "Pinned Apps & Sites"
+        case .folders: "Folders & Trash"
+        case .openApps: "Open Apps"
+        case .tabs: "Chrome Tabs"
+        case .widgets: "Widgets"
+        }
     }
 }
 
@@ -267,5 +455,34 @@ struct SidebarFolderGlyph: Codable, Equatable {
             }
         }
         return SidebarFolderGlyph(symbol: "folder", tint: .gray)
+    }
+}
+
+/// A website pinned to the sidebar: the address it opens and the name it
+/// shows in its tooltip. It stands for its whole site: any open tab on the
+/// same host counts as it.
+struct SidebarPinnedSite: Codable, Equatable, Identifiable {
+    let url: URL
+    let title: String
+
+    var id: String { url.absoluteString }
+
+    var host: String? { Self.host(of: url) }
+
+    /// True for a page of this pinned site. A site pinned at its root
+    /// (gmail.com) takes any page on its host; one pinned deeper, like a
+    /// Claude artifact, only the pages under its own address, so pinning
+    /// one artifact does not claim every page of claude.ai.
+    func matches(_ pageURL: URL?) -> Bool {
+        guard let pageURL, let host, Self.host(of: pageURL) == host else { return false }
+        let path = url.path
+        guard !path.isEmpty, path != "/" else { return true }
+        return pageURL.path.hasPrefix(path)
+    }
+
+    /// The host without "www.", the way tabs are matched to sites.
+    static func host(of url: URL) -> String? {
+        guard let host = url.host?.lowercased() else { return nil }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 }

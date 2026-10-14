@@ -22,11 +22,14 @@ import SwiftUI
 struct SidebarWidgetItem: View {
     let widget: WidgetTile
     var isRail = false
+    /// Set under the greeting: a line of text matching the date and time,
+    /// with no icon (the events widget only).
+    var isInline = false
 
     var body: some View {
         switch widget.kind {
         case .calendar, .calendarDate:
-            SidebarCalendarWidget(widget: widget, isRail: isRail)
+            SidebarCalendarWidget(widget: widget, isRail: isRail, isInline: isInline)
         case .nowPlaying:
             SidebarNowPlayingWidget(widget: widget, isRail: isRail)
         case .systemStatus:
@@ -38,7 +41,7 @@ struct SidebarWidgetItem: View {
         case .batteries:
             SidebarWidgetShell(widget: widget, isRail: isRail, systemName: "battery.75percent", title: widget.title)
         case .weather:
-            SidebarWidgetShell(widget: widget, isRail: isRail, systemName: "cloud.sun", title: widget.title)
+            SidebarWeatherWidget(widget: widget, isRail: isRail)
         case .search:
             SidebarWidgetShell(widget: widget, isRail: isRail, systemName: "magnifyingglass", title: widget.title)
         case .photoFrame:
@@ -66,6 +69,7 @@ private struct SidebarWidgetShell<Trailing: View>: View {
     /// the right gives way instead.
     var keepsTitleWhole = false
     var action: (() -> Void)?
+    var isInline = false
     @ViewBuilder var trailing: () -> Trailing
 
     @State private var isHovered = false
@@ -102,6 +106,31 @@ private struct SidebarWidgetShell<Trailing: View>: View {
                     restingOpacity: 0.07,
                     cornerRadius: SidebarMetrics.tileCornerRadius
                 ))
+        } else if isInline {
+            // Same type as the date and time above it, set apart as a small
+            // card: a soft background, and a bar of the calendar's color on
+            // its left edge, where the color marks without having to be read.
+            HStack(spacing: 0) {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(iconColor ?? Color.secondary)
+                    .frame(width: 3)
+                    .padding(.vertical, 6)
+                    .padding(.trailing, 8)
+
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(isDimmed ? .secondary : .primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer(minLength: 6)
+
+                trailing()
+            }
+            .padding(.leading, 5)
+            .padding(.trailing, 5)
+            .frame(height: 30)
+            .background(SidebarItemBackground(isHovered: isHovered, isCurrent: false, restingOpacity: 0.06, cornerRadius: 8))
         } else {
             HStack(spacing: 0) {
                 icon(size: 12)
@@ -149,7 +178,8 @@ extension SidebarWidgetShell where Trailing == EmptyView {
         pulses: Bool = false,
         title: String,
         isDimmed: Bool = false,
-        action: (() -> Void)? = nil
+        action: (() -> Void)? = nil,
+        isInline: Bool = false
     ) {
         self.widget = widget
         self.isRail = isRail
@@ -159,6 +189,7 @@ extension SidebarWidgetShell where Trailing == EmptyView {
         self.title = title
         self.isDimmed = isDimmed
         self.action = action
+        self.isInline = isInline
         self.trailing = { EmptyView() }
     }
 }
@@ -179,11 +210,13 @@ private struct SidebarWidgetFigure: View {
 
 // MARK: - Calendar
 
-/// The next event and when it starts. A camera joins its video call; an
-/// orange count flags invitations waiting for an answer.
+/// The next event and how long until it starts ("in 25 min"), in the
+/// text color, where it reads best (the calendar's color stays on the
+/// icon); an orange count flags invitations waiting for an answer.
 private struct SidebarCalendarWidget: View {
     let widget: WidgetTile
     let isRail: Bool
+    var isInline = false
 
     @ObservedObject private var calendar = CalendarService.shared
 
@@ -191,10 +224,13 @@ private struct SidebarCalendarWidget: View {
         Set(widget.settings.stringList("calendar.calendarIDs") ?? [])
     }
 
+    /// The person's own events: holidays, the clock change and birthdays
+    /// are left out.
     private var events: [CalendarEventSnapshot] {
         let allowed = allowedCalendarIDs
-        guard !allowed.isEmpty else { return calendar.upcomingEvents }
-        return calendar.upcomingEvents.filter { allowed.contains($0.calendarIdentifier) }
+        let own = calendar.upcomingEvents.filter { !$0.isInformational }
+        guard !allowed.isEmpty else { return own }
+        return own.filter { allowed.contains($0.calendarIdentifier) }
     }
 
     /// The next timed event, or the next all-day one when nothing is timed.
@@ -222,18 +258,23 @@ private struct SidebarCalendarWidget: View {
                         Task {
                             _ = await calendar.requestAccess()
                         }
-                    }
+                    },
+                    isInline: isInline
                 )
             } else if let event = nextEvent {
-                SidebarWidgetShell(
-                    widget: widget,
-                    isRail: isRail,
-                    systemName: "calendar",
-                    iconColor: Color(nsColor: event.color),
-                    title: event.title,
-                    action: { event.openInCalendar() },
-                    trailing: { trailing(for: event) }
-                )
+                // Redrawn every minute, so the countdown stays right.
+                TimelineView(.everyMinute) { context in
+                    SidebarWidgetShell(
+                        widget: widget,
+                        isRail: isRail,
+                        systemName: "calendar",
+                        iconColor: Color(nsColor: event.color),
+                        title: event.title,
+                        action: { event.openInCalendar() },
+                        isInline: isInline,
+                        trailing: { trailing(for: event, now: context.date) }
+                    )
+                }
             } else {
                 SidebarWidgetShell(
                     widget: widget,
@@ -241,6 +282,7 @@ private struct SidebarCalendarWidget: View {
                     systemName: "calendar",
                     title: "No upcoming events",
                     isDimmed: true,
+                    isInline: isInline,
                     trailing: { invitationBadge }
                 )
             }
@@ -251,26 +293,23 @@ private struct SidebarCalendarWidget: View {
     }
 
     @ViewBuilder
-    private func trailing(for event: CalendarEventSnapshot) -> some View {
+    private func trailing(for event: CalendarEventSnapshot, now: Date) -> some View {
         HStack(spacing: 4) {
             invitationBadge
 
-            SidebarWidgetFigure(text: timeText(for: event))
-
-            if let url = event.quickJoinURL {
-                Button {
-                    NSWorkspace.shared.open(url)
-                } label: {
-                    Image(systemName: "video.fill")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 20, height: 16)
-                        .background(Capsule().fill(Color.green))
-                        .contentShape(Rectangle())
+            Text(countdown(for: event, now: now))
+                .font(.system(size: 12, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, isInline ? 6 : 0)
+                .padding(.vertical, isInline ? 2 : 0)
+                .background {
+                    if isInline {
+                        Capsule().fill(Color.primary.opacity(0.08))
+                    }
                 }
-                .buttonStyle(.plain)
-                .help("Join the call")
-            }
         }
     }
 
@@ -288,16 +327,38 @@ private struct SidebarCalendarWidget: View {
         }
     }
 
-    /// The start time today, the weekday for another day.
-    private func timeText(for event: CalendarEventSnapshot) -> String {
-        let isToday = Calendar.current.isDateInToday(event.startDate)
+    private static var isFrench: Bool {
+        Locale.preferredLanguages.first?.hasPrefix("fr") == true
+    }
+
+    /// How long until the event: "in 25 min", "in 1 h 10", "now" while it
+    /// runs; past today, its day; an all-day event, "today" or its day.
+    private func countdown(for event: CalendarEventSnapshot, now: Date) -> String {
+        let french = Self.isFrench
+        let locale = Locale(identifier: Locale.preferredLanguages.first ?? "en")
+        let day = event.startDate.formatted(.dateTime.weekday(.abbreviated).locale(locale))
         if event.isAllDay {
-            return isToday ? "today" : event.startDate.formatted(.dateTime.weekday(.abbreviated))
+            return Calendar.current.isDateInToday(event.startDate) ? (french ? "aujourd'hui" : "today") : day
         }
-        if isToday {
-            return event.startDate.formatted(date: .omitted, time: .shortened)
+        if event.startDate <= now {
+            return french ? "en cours" : "now"
         }
-        return event.startDate.formatted(.dateTime.weekday(.abbreviated))
+        let minutes = Int(ceil(event.startDate.timeIntervalSince(now) / 60))
+        if minutes < 60 {
+            return french ? "dans \(minutes) min" : "in \(minutes) min"
+        }
+        if minutes < 12 * 60 {
+            let hours = minutes / 60
+            let rest = minutes % 60
+            let text = rest == 0 ? "\(hours) h" : "\(hours) h \(String(format: "%02d", rest))"
+            return french ? "dans \(text)" : "in \(text)"
+        }
+        if Calendar.current.isDateInTomorrow(event.startDate) {
+            return french ? "demain" : "tomorrow"
+        }
+        return Calendar.current.isDateInToday(event.startDate)
+            ? event.startDate.formatted(date: .omitted, time: .shortened)
+            : day
     }
 }
 
@@ -361,6 +422,55 @@ private struct SidebarNowPlayingWidget: View {
 
 /// How full the internal disk is, and the network rates. CPU and memory
 /// are in the hover detail.
+/// The weather where the Mac is: the sky's symbol, the place, and the
+/// temperature on the right; the full forecast opens beside on hover.
+/// Location is asked for only when the row is clicked, never on its own.
+private struct SidebarWeatherWidget: View {
+    let widget: WidgetTile
+    let isRail: Bool
+
+    @ObservedObject private var weather = WeatherService.shared
+
+    var body: some View {
+        Group {
+            if !weather.hasLocationAuthorization {
+                SidebarWidgetShell(
+                    widget: widget,
+                    isRail: isRail,
+                    systemName: "location",
+                    title: "Enable Weather",
+                    isDimmed: true,
+                    action: {
+                        Task {
+                            _ = await weather.requestAccess()
+                        }
+                    }
+                )
+            } else if let snapshot = weather.snapshot {
+                SidebarWidgetShell(
+                    widget: widget,
+                    isRail: isRail,
+                    systemName: snapshot.symbolName,
+                    title: snapshot.locationName.isEmpty ? snapshot.conditionDescription : snapshot.locationName,
+                    action: { weather.openInWeatherApp() },
+                    trailing: { SidebarWidgetFigure(text: snapshot.roundedTemperatureText) }
+                )
+            } else {
+                SidebarWidgetShell(
+                    widget: widget,
+                    isRail: isRail,
+                    systemName: "cloud.sun",
+                    title: "Weather",
+                    isDimmed: true
+                )
+            }
+        }
+        .task {
+            weather.ensureFreshWeather()
+        }
+    }
+}
+
 private struct SidebarSystemStatusWidget: View {
     let widget: WidgetTile
     let isRail: Bool
@@ -506,6 +616,9 @@ final class SidebarWidgetHoverController {
     private var isPanelHovered = false
     private var showWork: DispatchWorkItem?
     private var hideWork: DispatchWorkItem?
+    /// Details pinned as windows of their own, by widget: they stay open
+    /// where they are, can be dragged anywhere, and close with their ×.
+    private var pinnedPanels: [String: NSPanel] = [:]
 
     /// Time the pointer may spend between the row and the panel.
     private let hideGrace: TimeInterval = 0.25
@@ -523,6 +636,8 @@ final class SidebarWidgetHoverController {
 
     func rowHoverChanged(widget: WidgetTile, isHovered: Bool, anchor: CGRect?) {
         guard widget.kind.isExpandable else { return }
+        // Already pinned open: hovering its row adds nothing.
+        guard pinnedPanels[widget.identifier] == nil else { return }
 
         if isHovered {
             hoveredRowIdentifier = widget.identifier
@@ -568,6 +683,34 @@ final class SidebarWidgetHoverController {
         panel?.orderOut(nil)
     }
 
+    // MARK: Pinning
+
+    /// Turns the detail on screen into a window of its own, where it is.
+    func pin(_ widget: WidgetTile) {
+        guard pinnedPanels[widget.identifier] == nil else { return }
+        let size = Self.detailSize(for: widget.kind)
+        let frame = (shownWidgetIdentifier == widget.identifier ? panel?.frame : nil)
+            ?? CGRect(origin: NSEvent.mouseLocation, size: size)
+        hide()
+
+        let pinned = makePanel()
+        pinned.level = .floating
+        pinned.isMovable = true
+        pinned.isMovableByWindowBackground = true
+        let hostingView = SidebarFirstMouseHostingView(
+            rootView: SidebarWidgetDetail(widget: widget, size: size, cornerRadius: Self.cornerRadius, isPinned: true)
+        )
+        hostingView.sizingOptions = []
+        pinned.contentView = hostingView
+        pinned.setFrame(frame, display: true)
+        pinned.orderFrontRegardless()
+        pinnedPanels[widget.identifier] = pinned
+    }
+
+    func unpin(_ widget: WidgetTile) {
+        pinnedPanels.removeValue(forKey: widget.identifier)?.orderOut(nil)
+    }
+
     private func scheduleHide() {
         hideWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
@@ -586,19 +729,26 @@ final class SidebarWidgetHoverController {
 
         let size = Self.detailSize(for: widget.kind)
         let hostingView = SidebarFirstMouseHostingView(
-            rootView: SidebarWidgetDetail(widget: widget, size: size, cornerRadius: Self.cornerRadius)
+            rootView: SidebarWidgetDetail(widget: widget, size: size, cornerRadius: Self.cornerRadius, isPinned: false)
         )
         hostingView.sizingOptions = []
         panel.contentView = hostingView
 
         let screen = NSScreen.screens.first { $0.frame.intersects(anchor) } ?? NSScreen.main
         let bounds = (screen?.visibleFrame ?? anchor).insetBy(dx: 8, dy: 8)
-        var origin = CGPoint(
-            x: (SidebarWindowController.shared.panelMaxX ?? anchor.maxX) + Self.gap,
-            y: anchor.midY - size.height / 2
-        )
-        origin.y = min(max(origin.y, bounds.minY), bounds.maxY - size.height)
-        origin.x = min(origin.x, bounds.maxX - size.width)
+        var origin: CGPoint
+        if let barTop = SidebarWindowController.shared.panelMaxY {
+            // The bar is along the bottom: the detail opens above it.
+            origin = CGPoint(x: anchor.midX - size.width / 2, y: barTop + Self.gap)
+            origin.x = min(max(origin.x, bounds.minX), bounds.maxX - size.width)
+        } else {
+            origin = CGPoint(
+                x: (SidebarWindowController.shared.panelMaxX ?? anchor.maxX) + Self.gap,
+                y: anchor.midY - size.height / 2
+            )
+            origin.y = min(max(origin.y, bounds.minY), bounds.maxY - size.height)
+            origin.x = min(origin.x, bounds.maxX - size.width)
+        }
 
         panel.setFrame(CGRect(origin: origin, size: size), display: true)
         shownWidgetIdentifier = widget.identifier
@@ -626,12 +776,14 @@ final class SidebarWidgetHoverController {
 
     private static func detailSize(for kind: WidgetKind) -> CGSize {
         switch kind {
-        case .calendar:
-            CGSize(width: 320, height: 300)
+        case .calendar, .calendarDate:
+            CGSize(width: 270, height: 250)
         case .nowPlaying:
-            CGSize(width: 340, height: 150)
+            CGSize(width: 270, height: 112)
         case .systemStatus:
-            CGSize(width: 280, height: 196)
+            CGSize(width: 270, height: 196)
+        case .weather:
+            CGSize(width: 270, height: 232)
         case .claudeActivity:
             CGSize(width: 300, height: 220)
         default:
@@ -653,26 +805,381 @@ private final class SidebarFirstMouseHostingView<Content: View>: NSHostingView<C
     }
 }
 
-/// The widget's detailed view on the sidebar's own opaque surface.
+/// The widget's detail on the sidebar's own opaque surface. The common
+/// widgets get a compact page in the manner of Notion: a small grey title,
+/// then rows of a grey label and its value, in the sidebar's type, with
+/// thin neutral bars instead of large gauges. The others keep the dock's
+/// expanded tile.
 private struct SidebarWidgetDetail: View {
     let widget: WidgetTile
     let size: CGSize
     let cornerRadius: CGFloat
+    /// Pinned: a window of its own, closed with ×. Otherwise the hover
+    /// detail, with a pin to keep it open.
+    let isPinned: Bool
+
+    @State private var isButtonHovered = false
+
+    @ViewBuilder
+    private var content: some View {
+        switch widget.kind {
+        case .systemStatus:
+            SidebarStatusDetail()
+        case .calendar, .calendarDate:
+            SidebarAgendaDetail(widget: widget)
+        case .weather:
+            SidebarWeatherDetail()
+        case .nowPlaying:
+            SidebarPlayingDetail(widget: widget)
+        default:
+            WidgetTileView(
+                tile: widget,
+                cornerRadius: cornerRadius,
+                renderedSpan: .four,
+                isWithinStack: false,
+                isExpanded: true,
+                isExpandedPreviewOpen: true
+            )
+        }
+    }
 
     var body: some View {
-        WidgetTileView(
-            tile: widget,
-            cornerRadius: cornerRadius,
-            renderedSpan: .four,
-            isWithinStack: false,
-            isExpanded: true,
-            isExpandedPreviewOpen: true
-        )
+        content
         .frame(width: size.width, height: size.height)
-        .background(SidebarChrome())
+        .background(SidebarPalette.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
+        )
+        .overlay(alignment: .topTrailing) {
+            Button {
+                if isPinned {
+                    SidebarWidgetHoverController.shared.unpin(widget)
+                } else {
+                    SidebarWidgetHoverController.shared.pin(widget)
+                }
+            } label: {
+                Image(systemName: isPinned ? "xmark" : "pin")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20, height: 20)
+                    .background(Circle().fill(Color.primary.opacity(isButtonHovered ? 0.12 : 0.06)))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .onHover { isButtonHovered = $0 }
+            .help(isPinned ? "Close" : "Keep Open in a Window")
+            .padding(6)
+        }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .onHover { hovering in
-            SidebarWidgetHoverController.shared.panelHoverChanged(hovering)
+            if !isPinned {
+                SidebarWidgetHoverController.shared.panelHoverChanged(hovering)
+            }
+        }
+    }
+}
+
+// MARK: - Compact details
+
+/// A detail page: a small grey title (with an optional note beside it),
+/// then its rows.
+private struct SidebarDetailPage<Content: View>: View {
+    let title: String
+    var note: String = ""
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                if !note.isEmpty {
+                    Text(note)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 6)
+            .frame(height: 22, alignment: .center)
+            .padding(.trailing, 22) // room for the pin
+
+            content()
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+/// One property row: a grey label, then the value, as in a Notion page.
+private struct SidebarDetailRow<Value: View>: View {
+    let label: String
+    var labelWidth: CGFloat = 64
+    var action: (() -> Void)?
+    @ViewBuilder let value: () -> Value
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: labelWidth, alignment: .leading)
+            value()
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 6)
+        .frame(height: 26)
+        .background(
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(Color.primary.opacity(isHovered && action != nil ? 0.05 : 0))
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { action?() }
+        .onHover { isHovered = $0 }
+    }
+}
+
+private struct SidebarDetailText: View {
+    let text: String
+    var isStrong = true
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 12, weight: isStrong ? .medium : .regular))
+            .monospacedDigit()
+            .foregroundStyle(isStrong ? .primary : .secondary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+    }
+}
+
+/// A thin neutral bar for a share, red only once it runs high.
+private struct SidebarDetailBar: View {
+    let fraction: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.primary.opacity(0.08))
+                Capsule()
+                    .fill(fraction >= 0.85 ? Color.red.opacity(0.75) : Color.primary.opacity(0.45))
+                    .frame(width: max(3, proxy.size.width * min(1, max(0, fraction))))
+            }
+        }
+        .frame(width: 54, height: 3)
+    }
+}
+
+// Performance
+
+private struct SidebarStatusDetail: View {
+    @ObservedObject private var status = SystemStatusService.shared
+
+    var body: some View {
+        SidebarDetailPage(title: "Performance") {
+            if let snapshot = status.snapshot {
+                usage("CPU", snapshot.cpuUsagePercent)
+                usage(
+                    "Memory", snapshot.memoryUsagePercent,
+                    note: "\(Self.bytes(snapshot.usedMemoryBytes, .memory)) / \(Self.bytes(snapshot.totalMemoryBytes, .memory))"
+                )
+                if let gpu = snapshot.gpuUsagePercent {
+                    usage("GPU", gpu)
+                }
+                if snapshot.diskTotalBytes > 0 {
+                    usage("SSD", snapshot.diskUsagePercent, note: "\(Self.bytes(snapshot.diskFreeBytes, .file)) free")
+                }
+                SidebarDetailRow(label: "Network") {
+                    HStack(spacing: 10) {
+                        SidebarDetailText(text: "↓ \(Self.rate(snapshot.receivedBytesPerSecond))")
+                        SidebarDetailText(text: "↑ \(Self.rate(snapshot.sentBytesPerSecond))")
+                    }
+                }
+            } else {
+                SidebarDetailRow(label: "") { SidebarDetailText(text: "Reading…", isStrong: false) }
+            }
+        }
+        .task { status.ensureFreshStatus() }
+    }
+
+    private func usage(_ label: String, _ percent: Double, note: String = "") -> some View {
+        SidebarDetailRow(label: label) {
+            HStack(spacing: 8) {
+                SidebarDetailText(text: "\(Int(percent.rounded()))%")
+                    .frame(width: 34, alignment: .leading)
+                SidebarDetailBar(fraction: percent / 100)
+                if !note.isEmpty {
+                    SidebarDetailText(text: note, isStrong: false)
+                }
+            }
+        }
+    }
+
+    private static func bytes(_ value: UInt64, _ style: ByteCountFormatter.CountStyle) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: value), countStyle: style)
+    }
+
+    private static func rate(_ value: Double) -> String {
+        "\(ByteCountFormatter.string(fromByteCount: Int64(max(0, value)), countStyle: .file))/s"
+    }
+}
+
+// Agenda
+
+private struct SidebarAgendaDetail: View {
+    let widget: WidgetTile
+
+    @ObservedObject private var calendar = CalendarService.shared
+
+    private var events: [CalendarEventSnapshot] {
+        let allowed = Set(widget.settings.stringList("calendar.calendarIDs") ?? [])
+        let all = calendar.upcomingEvents.filter { !$0.isInformational }
+        return Array((allowed.isEmpty ? all : all.filter { allowed.contains($0.calendarIdentifier) }).prefix(6))
+    }
+
+    private static var locale: Locale {
+        Locale(identifier: Locale.preferredLanguages.first ?? "en")
+    }
+
+    var body: some View {
+        SidebarDetailPage(title: "Agenda") {
+            if events.isEmpty {
+                SidebarDetailRow(label: "") { SidebarDetailText(text: "No upcoming events", isStrong: false) }
+            }
+            ForEach(Array(events.enumerated()), id: \.element.eventIdentifier) { index, event in
+                if index == 0 || !Calendar.current.isDate(event.startDate, inSameDayAs: events[index - 1].startDate) {
+                    Text(dayTitle(event.startDate))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 6)
+                        .padding(.top, index == 0 ? 2 : 6)
+                        .frame(height: 18, alignment: .bottom)
+                }
+                SidebarDetailRow(label: timeText(event), labelWidth: 40, action: { event.openInCalendar() }) {
+                    HStack(spacing: 7) {
+                        RoundedRectangle(cornerRadius: 1, style: .continuous)
+                            .fill(Color(nsColor: event.color))
+                            .frame(width: 3, height: 14)
+                        SidebarDetailText(text: event.title)
+                    }
+                }
+            }
+        }
+        .task { calendar.ensureFreshEvent() }
+    }
+
+    private func dayTitle(_ date: Date) -> String {
+        let french = Self.locale.identifier.hasPrefix("fr")
+        if Calendar.current.isDateInToday(date) { return french ? "Aujourd'hui" : "Today" }
+        if Calendar.current.isDateInTomorrow(date) { return french ? "Demain" : "Tomorrow" }
+        let text = date.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Self.locale))
+        return text.prefix(1).uppercased() + text.dropFirst()
+    }
+
+    private func timeText(_ event: CalendarEventSnapshot) -> String {
+        if event.isAllDay { return Self.locale.identifier.hasPrefix("fr") ? "Jour" : "All day" }
+        return event.startDate.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(Self.locale))
+    }
+}
+
+// Weather
+
+private struct SidebarWeatherDetail: View {
+    @ObservedObject private var weather = WeatherService.shared
+
+    var body: some View {
+        if let snapshot = weather.snapshot {
+            SidebarDetailPage(title: "Weather", note: snapshot.locationName) {
+                SidebarDetailRow(label: "Now", action: { weather.openInWeatherApp() }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: snapshot.symbolName)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        SidebarDetailText(text: snapshot.roundedTemperatureText)
+                        SidebarDetailText(text: snapshot.conditionDescription, isStrong: false)
+                    }
+                }
+                ForEach(snapshot.forecast.prefix(5)) { day in
+                    SidebarDetailRow(label: day.weekdayShortText) {
+                        HStack(spacing: 8) {
+                            Image(systemName: day.symbolName)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 16)
+                            SidebarDetailText(text: Self.degrees(day.lowTemperature), isStrong: false)
+                                .frame(width: 30, alignment: .trailing)
+                            SidebarDetailText(text: Self.degrees(day.highTemperature))
+                                .frame(width: 30, alignment: .leading)
+                        }
+                    }
+                }
+            }
+            .task { weather.ensureFreshWeather() }
+        } else {
+            SidebarDetailPage(title: "Weather") {
+                SidebarDetailRow(label: "") { SidebarDetailText(text: "Reading…", isStrong: false) }
+            }
+            .task { weather.ensureFreshWeather() }
+        }
+    }
+
+    private static func degrees(_ value: Double?) -> String {
+        value.map { "\(Int($0.rounded()))°" } ?? "–"
+    }
+}
+
+// Now playing
+
+private struct SidebarPlayingDetail: View {
+    let widget: WidgetTile
+
+    @ObservedObject private var media = MediaPlaybackService.shared
+
+    private var bundleIdentifier: String {
+        if let configured = widget.settings.string(NowPlayingWidgetSettings.appBundleIdentifierKey), !configured.isEmpty {
+            return configured
+        }
+        return widget.ownerBundleIdentifier
+    }
+
+    var body: some View {
+        let state = media.state(for: bundleIdentifier)
+        SidebarDetailPage(title: "Now Playing", note: state?.displayName ?? "") {
+            HStack(spacing: 10) {
+                Group {
+                    if let data = state?.artworkData, let image = NSImage(data: data) {
+                        Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        Color.primary.opacity(0.06)
+                            .overlay(Image(systemName: "music.note").foregroundStyle(.tertiary))
+                    }
+                }
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    SidebarDetailText(text: state?.hasContent == true ? state!.title : "Not Playing")
+                    SidebarDetailText(text: state?.artist ?? "", isStrong: false)
+                }
+                Spacer(minLength: 0)
+                control("backward.fill", "Previous") { await media.skipToPrevious(for: $0) }
+                control(state?.isPlaying == true ? "pause.fill" : "play.fill", "Play or Pause") { await media.pressPlayPauseButton(for: $0) }
+                control("forward.fill", "Next") { await media.skipToNext(for: $0) }
+            }
+            .padding(.horizontal, 6)
+            .padding(.top, 4)
+        }
+    }
+
+    private func control(_ symbol: String, _ help: String, _ run: @escaping (String) async -> Void) -> some View {
+        let target = bundleIdentifier
+        return SidebarRowButton(systemName: symbol, help: help) {
+            Task { await run(target) }
         }
     }
 }

@@ -40,9 +40,8 @@ enum SidebarMetrics {
 ///   1. the custom icon pack (`SidebarIconPack`), for the apps it covers;
 ///   2. with website icons on, the icon of the app's website when one
 ///      was found (`SidebarFaviconStore`);
-///   3. with tinted icons on, a glyph cut out of the app's icon and drawn
-///      in the icon's main color (`SidebarIconGlyph`);
-///   4. the icon picked with "Change Icon...", or the app's own.
+///   3. the icon picked with "Change Icon...", or the app's own, without
+///      the shadow and margin macOS draws around it (`SidebarIconTrim`).
 struct SidebarAppIcon: View {
     let bundleIdentifier: String
     let size: CGFloat
@@ -51,6 +50,7 @@ struct SidebarAppIcon: View {
     @ObservedObject private var iconPack = SidebarIconPack.shared
     @ObservedObject private var favicons = SidebarFaviconStore.shared
     @ObservedObject private var sidebar = SidebarPreferences.shared
+    @ObservedObject private var icons = IconCacheService.shared
 
     private static let ink = Color.primary.opacity(0.74)
 
@@ -61,16 +61,8 @@ struct SidebarAppIcon: View {
         } else if sidebar.usesWebsiteIcons, let favicon = favicons.icon(forBundleIdentifier: bundleIdentifier) {
             SidebarPackIconView(icon: favicon, ink: faviconInk(for: favicon))
                 .frame(width: size, height: size)
-        } else if sidebar.usesTintedIcons, let glyph = SidebarIconGlyph.glyph(for: image, key: glyphKey) {
-            Image(nsImage: glyph.image)
-                .renderingMode(.template)
-                .resizable()
-                .interpolation(.high)
-                .aspectRatio(contentMode: .fit)
-                .foregroundStyle(glyph.tint.map { Color(nsColor: $0) } ?? Self.ink)
-                .frame(width: size, height: size)
         } else {
-            Image(nsImage: image)
+            Image(nsImage: SidebarIconTrim.trimmed(image, key: glyphKey))
                 .resizable()
                 .interpolation(.high)
                 .aspectRatio(contentMode: .fit)
@@ -104,6 +96,28 @@ struct SidebarAppIcon: View {
             return "\(bundleIdentifier)|\(overrideURL.path)"
         }
         return bundleIdentifier
+    }
+}
+
+/// A system symbol drawn like a Claude project icon: the mark in a color
+/// on a rounded wash of the same color. Stands in for a site with no icon.
+struct SidebarAppSymbolView: View {
+    let systemName: String
+    let tint: Color
+    let size: CGFloat
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: size * 0.56, weight: .medium))
+            .symbolRenderingMode(.monochrome)
+            .foregroundStyle(tint)
+            .frame(width: size, height: size)
+            .background(
+                RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                    .fill(tint.opacity(colorScheme == .dark ? 0.24 : 0.15))
+            )
     }
 }
 
@@ -180,7 +194,7 @@ func sidebarOpenAppSearch() {
 }
 
 /// Unread count next to an app, as the Dock reports it.
-private struct SidebarBadge: View {
+struct SidebarBadge: View {
     let text: String
 
     var body: some View {
@@ -194,6 +208,21 @@ private struct SidebarBadge: View {
             .background(Capsule().fill(Color.red))
     }
 }
+
+extension BrowserTab {
+    /// The unread count a site puts in its tab's title, the way Gmail
+    /// writes "Inbox (3)" and others "(3) Messages": the first number in
+    /// brackets. Four-digit numbers are left alone, they are mostly years.
+    var unreadCount: String? {
+        guard let match = tab_unreadPattern.firstMatch(
+            in: title, range: NSRange(title.startIndex..., in: title)
+        ), let range = Range(match.range(at: 1), in: title) else { return nil }
+        let count = String(title[range])
+        return count == "0" ? nil : count
+    }
+}
+
+private let tab_unreadPattern = try! NSRegularExpression(pattern: #"\((\d{1,3}\+?)\)"#)
 
 /// Background shared by every row and tile: nothing at rest, a faint wash
 /// under the pointer, and a light raised pill for the current item, the
@@ -225,14 +254,120 @@ struct SidebarItemBackground: View {
 /// Pinned apps as a grid of small tiles, like the favorites at the top of
 /// Arc's sidebar. A dot marks the ones that are running.
 struct SidebarFavoritesGrid: View {
-    let apps: [AppTile]
+    let items: [SidebarPinnedItem]
 
     var body: some View {
         LazyVGrid(columns: SidebarMetrics.tileColumns, spacing: SidebarMetrics.tileSpacing) {
-            ForEach(apps, id: \.bundleIdentifier) { app in
-                SidebarAppTile(app: app)
+            ForEach(items) { item in
+                SidebarPinnedItemTile(item: item)
             }
         }
+    }
+}
+
+/// A pinned app or a pinned site: they share one list, so the open ones of
+/// both kinds can come first together.
+enum SidebarPinnedItem: Identifiable {
+    case app(AppTile)
+    case site(SidebarPinnedSite)
+
+    var id: String {
+        switch self {
+        case .app(let app): "app-\(app.bundleIdentifier)"
+        case .site(let site): "site-\(site.id)"
+        }
+    }
+}
+
+struct SidebarPinnedItemTile: View {
+    let item: SidebarPinnedItem
+
+    var body: some View {
+        switch item {
+        case .app(let app): SidebarAppTile(app: app)
+        case .site(let site): SidebarSiteTile(site: site)
+        }
+    }
+}
+
+/// A pinned website as a tile, beside the pinned apps: the site's icon,
+/// the dot under it while a tab on the site is open, and the white pill
+/// while that tab is the one in front. A click goes to the open tab, or
+/// opens the site in a new one, launching Chrome when needed.
+struct SidebarSiteTile: View {
+    let site: SidebarPinnedSite
+
+    @ObservedObject private var workspace = WorkspaceService.shared
+    @ObservedObject private var browserTabs = BrowserTabsService.shared
+    @ObservedObject private var favicons = SidebarFaviconStore.shared
+    @State private var isHovered = false
+
+    private static let ink = Color.primary.opacity(0.74)
+
+    private var openTab: BrowserTab? {
+        browserTabs.tab(for: site)
+    }
+
+    /// A tab on the site shows unread items in its title.
+    private var hasBadge: Bool {
+        DockyPreferences.shared.showsAppBadges
+            && (browserTabs.tabs ?? []).contains { site.matches($0.url) && $0.unreadCount != nil }
+    }
+
+    private var isCurrent: Bool {
+        guard let openTab else { return false }
+        return workspace.frontmostBundleIdentifier == BrowserTabsService.browserBundleIdentifier
+            && openTab.isActive && openTab.isInFrontWindow
+    }
+
+    var body: some View {
+        Button {
+            browserTabs.openOrFocus(site)
+        } label: {
+            icon
+                .frame(width: SidebarMetrics.tileIconSize, height: SidebarMetrics.tileIconSize)
+                // Sites with no tab open recede, so the open ones stand out.
+                .saturation(openTab != nil || isHovered ? 1 : 0.2)
+                .opacity(openTab != nil || isHovered ? 1 : 0.5)
+                .frame(maxWidth: .infinity)
+                .frame(height: SidebarMetrics.tileHeight)
+                .background(SidebarItemBackground(
+                    isHovered: isHovered,
+                    isCurrent: isCurrent,
+                    restingOpacity: openTab != nil ? 0.11 : 0.04,
+                    cornerRadius: SidebarMetrics.tileCornerRadius
+                ))
+                .overlay(alignment: .topTrailing) {
+                    if hasBadge {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 7, height: 7)
+                            .padding(4)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(site.title.isEmpty ? (site.host ?? site.url.absoluteString) : site.title)
+        .background {
+            ContextActionMenuPresenter(
+                actionProvider: { _ in
+                    [
+                        .action("Open in New Tab") { BrowserTabsService.shared.open(site.url) },
+                        .divider,
+                        .action("Unpin") {
+                            SidebarPreferences.shared.unpin(site)
+                        }
+                    ]
+                },
+                preferredEdge: .maxX
+            )
+        }
+    }
+
+    private var icon: some View {
+        SidebarWebIcon(url: openTab?.url ?? site.url, size: SidebarMetrics.tileIconSize)
     }
 }
 
@@ -263,20 +398,17 @@ struct SidebarAppTile: View {
             workspace.activateOrOpen(bundleIdentifier: app.bundleIdentifier)
         } label: {
             SidebarAppIcon(bundleIdentifier: app.bundleIdentifier, size: SidebarMetrics.tileIconSize)
+                // Closed apps recede, so the open ones stand out.
+                .saturation(isRunning || isHovered ? 1 : 0.2)
+                .opacity(isRunning || isHovered ? 1 : 0.5)
                 .frame(maxWidth: .infinity)
                 .frame(height: SidebarMetrics.tileHeight)
                 .background(SidebarItemBackground(
                     isHovered: isHovered,
                     isCurrent: isFrontmost,
-                    restingOpacity: 0.07,
+                    restingOpacity: isRunning ? 0.11 : 0.04,
                     cornerRadius: SidebarMetrics.tileCornerRadius
                 ))
-                .overlay(alignment: .bottom) {
-                    Capsule()
-                        .fill(Color.primary.opacity(isRunning ? 0.45 : 0))
-                        .frame(width: 8, height: 2)
-                        .padding(.bottom, 2.5)
-                }
                 .overlay(alignment: .topTrailing) {
                     if hasBadge {
                         Circle()
@@ -319,6 +451,55 @@ enum SidebarPinnedFolder: Identifiable, Equatable {
         case .apps(let folder): folder.displayName
         case .finder(let folder): folder.displayName
         }
+    }
+}
+
+/// Takes a folder out of the pinned block. A Finder folder simply leaves
+/// it; an app folder is taken apart, and its apps go back among the pinned
+/// apps, so no app is lost along with the folder.
+func sidebarUnpin(_ folder: SidebarPinnedFolder) {
+    let store = TileStore.shared
+    for tile in store.tiles {
+        switch (folder, tile.content) {
+        case (.apps(let target), .appFolder(let candidate)) where candidate.identifier == target.identifier:
+            store.ungroupAppFolder(tileID: tile.id)
+            return
+        case (.finder(let target), .folder(let candidate)) where candidate.url.standardizedFileURL == target.url.standardizedFileURL:
+            store.removeTrailingItem(tileID: tile.id)
+            return
+        default:
+            continue
+        }
+    }
+}
+
+/// Asks for a folder and pins it, after the other folders and before the
+/// Trash.
+func sidebarPinFolder() {
+    let panel = NSOpenPanel()
+    panel.canChooseDirectories = true
+    panel.canChooseFiles = false
+    panel.allowsMultipleSelection = true
+    panel.prompt = "Pin"
+    panel.message = "Choose folders to pin to the sidebar"
+    NSApp.activate()
+
+    guard panel.runModal() == .OK else { return }
+    let store = TileStore.shared
+    for url in panel.urls {
+        let items = DockyPreferences.shared.trailingItems
+        let alreadyPinned = store.tiles.contains { tile in
+            if case .folder(let folder) = tile.content {
+                return folder.url.standardizedFileURL == url.standardizedFileURL
+            }
+            return false
+        }
+        guard !alreadyPinned else { continue }
+        let trashIndex = items.firstIndex { $0.kind == .trash } ?? items.count
+        store.insertTrailingItem(
+            .folder(url: url, displayName: FileManager.default.displayName(atPath: url.path)),
+            at: trashIndex
+        )
     }
 }
 
@@ -420,14 +601,18 @@ struct SidebarFolderTileView: View {
 
         var actions: [ContextAction] = [
             .submenu("Icon", children: symbolActions),
-            .submenu("Color", children: colorActions)
+            .submenu("Color", children: colorActions),
+            .divider
         ]
         if case .finder(let finderFolder) = folder {
-            actions.append(.divider)
             actions.append(.action("Open in Finder") {
                 NSWorkspace.shared.open(finderFolder.url)
             })
         }
+        let pinned = folder
+        actions.append(.action("Unpin") {
+            sidebarUnpin(pinned)
+        })
         return actions
     }
 
@@ -660,6 +845,14 @@ struct SidebarTrashTile: View {
                 _ = await AppleScriptService.shared.openTrash()
             }
         }
+        .background {
+            ContextActionMenuPresenter(
+                actionProvider: { _ in
+                    [.action("Unpin") { SidebarPreferences.shared.showsTrash = false }]
+                },
+                preferredEdge: .maxX
+            )
+        }
     }
 }
 
@@ -828,6 +1021,191 @@ private struct SidebarWindowRow: View {
         .accessibilityAction(.default) {
             _ = WorkspaceService.shared.focus(window: window)
         }
+    }
+}
+
+/// A web page's icon, from the first of these that has one:
+///
+///   1. the icon Chrome shows for that very page (`ChromeFaviconStore`),
+///      which knows pages behind a sign-in and icons set from script;
+///   2. the icon of the page's site, fetched from the web
+///      (`SidebarFaviconStore`);
+///   3. a globe.
+struct SidebarWebIcon: View {
+    let url: URL?
+    let size: CGFloat
+
+    @ObservedObject private var chromeFavicons = ChromeFaviconStore.shared
+    @ObservedObject private var favicons = SidebarFaviconStore.shared
+
+    private static let ink = Color.primary.opacity(0.74)
+
+    var body: some View {
+        if let image = chromeFavicons.icon(for: url) {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+        } else if let host = url.flatMap(SidebarPinnedSite.host(of:)), let favicon = favicons.icon(forSite: host) {
+            SidebarPackIconView(icon: favicon, ink: Self.ink)
+                .frame(width: size, height: size)
+        } else {
+            SidebarAppSymbolView(systemName: "globe", tint: Self.ink, size: size)
+        }
+    }
+}
+
+/// A Chrome tab, in the Web group under the open apps: the site's icon,
+/// the page's title, the white pill when it is the tab in front, and
+/// a close button under the pointer.
+struct SidebarBrowserTabRow: View {
+    let tab: BrowserTab
+
+    @ObservedObject private var workspace = WorkspaceService.shared
+    @ObservedObject private var favicons = SidebarFaviconStore.shared
+    @State private var isHovered = false
+
+    private static let ink = Color.primary.opacity(0.74)
+
+    private var isCurrent: Bool {
+        workspace.frontmostBundleIdentifier == BrowserTabsService.browserBundleIdentifier
+            && tab.isActive && tab.isInFrontWindow
+    }
+
+    private var title: String {
+        let trimmed = tab.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? (tab.host ?? "New Tab") : trimmed
+    }
+
+    var body: some View {
+        HStack(spacing: SidebarMetrics.rowSpacing) {
+            icon
+                .frame(width: SidebarMetrics.rowIconSize, height: SidebarMetrics.rowIconSize)
+
+            Text(title)
+                .font(.system(size: SidebarMetrics.rowFontSize, weight: isCurrent ? .medium : .regular))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 0)
+
+            if isHovered {
+                SidebarRowButton(systemName: "xmark", help: "Close tab") {
+                    BrowserTabsService.shared.close(tab)
+                }
+            } else if DockyPreferences.shared.showsAppBadges, let count = tab.unreadCount {
+                SidebarBadge(text: count)
+            }
+        }
+        .padding(.leading, SidebarMetrics.rowPadding)
+        .padding(.trailing, 5)
+        .frame(height: SidebarMetrics.rowHeight)
+        .background(SidebarItemBackground(isHovered: isHovered, isCurrent: isCurrent))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            BrowserTabsService.shared.focus(tab)
+        }
+        .onHover { isHovered = $0 }
+        .help(tab.url?.absoluteString ?? title)
+        .background {
+            ContextActionMenuPresenter(
+                actionProvider: { _ in pinActions },
+                preferredEdge: .maxX
+            )
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(.default) {
+            BrowserTabsService.shared.focus(tab)
+        }
+    }
+
+    /// "Pin" puts the tab's site among the pinned apps; "Unpin" takes it
+    /// back out.
+    private var pinActions: [ContextAction] {
+        guard let url = tab.url, tab.host != nil else { return [] }
+        let preferences = SidebarPreferences.shared
+        let title = self.title
+        let tab = self.tab
+        let pinned = preferences.pinnedSite(for: url)
+        return [
+            pinned.map { site in .action("Unpin") { preferences.unpin(site) } }
+                ?? .action("Pin") { preferences.pin(site: url, title: title) },
+            .divider,
+            .action("Close Tab") { BrowserTabsService.shared.close(tab) }
+        ]
+    }
+
+    private var icon: some View {
+        SidebarWebIcon(url: tab.url, size: SidebarMetrics.rowIconSize)
+    }
+}
+
+/// The title of a group of the open list ("Apps", "Web"). A click folds
+/// or unfolds the group; folded, it shows how many items it holds. Under
+/// the pointer it offers to close the whole group at once.
+struct SidebarGroupHeader: View {
+    let title: String
+    let count: Int
+    let isFolded: Bool
+    let closeTitle: String
+    let toggle: () -> Void
+    let close: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.tertiary)
+                .rotationEffect(.degrees(isFolded ? 0 : 90))
+
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            if isFolded, count > 0 {
+                Text("\(count)")
+                    .font(.system(size: 10, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 5)
+                    .frame(height: 15)
+                    .background(Capsule().fill(Color.primary.opacity(0.07)))
+            }
+
+            Spacer(minLength: 0)
+
+            if isHovered, count > 0 {
+                Button(action: close) {
+                    Text(closeTitle)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .frame(height: 18)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(Color.primary.opacity(0.05))
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+            }
+        }
+        .padding(.leading, SidebarMetrics.rowPadding)
+        .padding(.trailing, 5)
+        .frame(height: 22)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: toggle)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+        .accessibilityAction(named: isFolded ? "Show" : "Hide", toggle)
     }
 }
 

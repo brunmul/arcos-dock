@@ -20,6 +20,14 @@
 //  with a second display arranged on the left, a slide would travel
 //  across that display.
 //
+//  Set to the bottom (`SidebarPreferences.edge`), the same panel runs along
+//  the bottom of the usable area instead, the full width, and the corners
+//  panel steps aside: its corners are drawn for a column.
+//
+//  While the app in front fills the whole screen (a video in full screen,
+//  a game, Steam Big Picture, any app in its own full-screen Space), the
+//  panel steps out of the way, and comes back when that ends.
+//
 //  The dock strip (`MainWindow`) still exists while the sidebar is on,
 //  because the Launchpad, window switcher and other overlays hang off it.
 //  It simply refuses to order in; see `MainWindow.order(_:relativeTo:)`.
@@ -40,6 +48,9 @@ final class SidebarWindowController: NSObject {
     private var isRevealed = true
     private var edgeDwellStart: Date?
     private var awayStart: Date?
+    private var fullScreenTimer: Timer?
+    /// Out of the way of a full-screen app.
+    private(set) var isSteppedAside = false
 
     /// How long the pointer must rest on the edge before the panel shows,
     /// so crossing to another display does not flash it.
@@ -75,19 +86,26 @@ final class SidebarWindowController: NSObject {
 
         // A child window is ordered out with its parent and stays right
         // above it, so the corners never outlive or sink under the sidebar.
-        cornersPanel.alphaValue = 1
+        cornersPanel.alphaValue = preferences.isBottom ? 0 : 1
         if cornersPanel.parent == nil {
             panel.addChildWindow(cornersPanel, ordered: .above)
         }
 
         observeInputsIfNeeded()
         updatePointerTracking()
+        startFullScreenWatch()
+        SidebarSwitcherController.shared.start()
+        _ = SidebarBookmarks.shared
     }
 
     func hide() {
         pointerTimer?.invalidate()
         pointerTimer = nil
+        fullScreenTimer?.invalidate()
+        fullScreenTimer = nil
+        isSteppedAside = false
         SidebarWidgetHoverController.shared.hide()
+        SidebarSwitcherController.shared.stop()
         panel?.orderOut(nil)
     }
 
@@ -101,21 +119,22 @@ final class SidebarWindowController: NSObject {
             return nil
         }
 
-        let visible = screen.visibleFrame
-        let frame = CGRect(
-            x: visible.minX,
-            y: visible.minY,
-            width: preferences.panelWidth,
-            height: visible.height
-        )
+        guard let frame = panelFrame() else { return nil }
         return (screen, frame)
     }
 
-    /// Right edge of the sidebar on screen, for the widget detail that
-    /// opens beside it.
+    /// Right edge of the sidebar on screen, for the widget detail and the
+    /// search that open beside it. Nil while the bar is at the bottom.
     var panelMaxX: CGFloat? {
-        guard let panel, panel.isVisible else { return nil }
+        guard let panel, panel.isVisible, !preferences.isBottom else { return nil }
         return panel.frame.maxX
+    }
+
+    /// Top edge of the bar while it is at the bottom, for the widget
+    /// detail that opens above it.
+    var panelMaxY: CGFloat? {
+        guard let panel, panel.isVisible, preferences.isBottom else { return nil }
+        return panel.frame.maxY
     }
 
     /// The display the sidebar lives on, whether or not it is showing.
@@ -193,6 +212,14 @@ final class SidebarWindowController: NSObject {
     private func panelFrame() -> CGRect? {
         guard let screen = targetScreen() else { return nil }
         let visible = screen.visibleFrame
+        if preferences.isBottom {
+            return CGRect(
+                x: visible.minX,
+                y: visible.minY,
+                width: visible.width,
+                height: SidebarPreferences.bottomHeight
+            )
+        }
         return CGRect(
             x: visible.minX,
             y: visible.minY,
@@ -239,6 +266,28 @@ final class SidebarWindowController: NSObject {
             }
             .store(in: &cancellables)
 
+        // Left <-> bottom.
+        preferences.$edge
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] edge in
+                guard let self else { return }
+                SidebarWidgetHoverController.shared.hide()
+                self.applyFrame()
+                self.cornersPanel?.alphaValue = edge == .bottom ? 0 : (self.isRevealed ? 1 : 0)
+            }
+            .store(in: &cancellables)
+
+        // Theme or wallpaper option: the desktop picture follows.
+        Publishers.CombineLatest(preferences.$themeID.removeDuplicates(), preferences.$matchesWallpaper.removeDuplicates())
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _, enabled in
+                guard let self else { return }
+                SidebarWallpaper.apply(self.preferences.theme, enabled: enabled)
+            }
+            .store(in: &cancellables)
+
         preferences.$isPinned
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
@@ -246,6 +295,63 @@ final class SidebarWindowController: NSObject {
                 self?.updatePointerTracking()
             }
             .store(in: &cancellables)
+    }
+
+    // MARK: - Full screen
+
+    /// Looks at the app in front twice a second. A window list read costs
+    /// little and needs no permission for the frames it reports.
+    private func startFullScreenWatch() {
+        guard fullScreenTimer == nil else { return }
+        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+            self?.checkFullScreen()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        fullScreenTimer = timer
+    }
+
+    private func checkFullScreen() {
+        guard let panel, let screen = targetScreen() else { return }
+        let fullScreen = Self.frontAppFillsScreen(screen)
+        guard fullScreen != isSteppedAside else { return }
+        isSteppedAside = fullScreen
+
+        if fullScreen {
+            SidebarWidgetHoverController.shared.hide()
+            SidebarSwitcherController.shared.hide()
+            panel.orderOut(nil)
+        } else {
+            panel.orderFrontRegardless()
+        }
+    }
+
+    /// True when the frontmost app (not Docky) has an ordinary window that
+    /// covers the whole display, menu bar included.
+    static func frontAppFillsScreen(_ screen: NSScreen) -> Bool {
+        guard let front = NSWorkspace.shared.frontmostApplication,
+              front.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+              let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                as? [[String: Any]]
+        else { return false }
+
+        // Window frames come with the origin at the top left of the
+        // primary display.
+        guard let primaryHeight = NSScreen.screens.first?.frame.height else { return false }
+        let target = CGRect(
+            x: screen.frame.minX,
+            y: primaryHeight - screen.frame.maxY,
+            width: screen.frame.width,
+            height: screen.frame.height
+        )
+        return windows.contains { window in
+            guard (window[kCGWindowOwnerPID as String] as? pid_t) == front.processIdentifier,
+                  (window[kCGWindowLayer as String] as? Int) == 0,
+                  let bounds = window[kCGWindowBounds as String] as? [String: CGFloat],
+                  let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary)
+            else { return false }
+            return frame.insetBy(dx: 1, dy: 1).contains(target.insetBy(dx: 2, dy: 2))
+                && frame.width <= target.width + 2
+        }
     }
 
     // MARK: - Reveal on the edge
@@ -300,12 +406,19 @@ final class SidebarWindowController: NSObject {
             return
         }
 
-        let edgeZone = CGRect(
-            x: screen.frame.minX,
-            y: screen.visibleFrame.minY,
-            width: 3,
-            height: screen.visibleFrame.height
-        )
+        let edgeZone = preferences.isBottom
+            ? CGRect(
+                x: screen.visibleFrame.minX,
+                y: screen.frame.minY,
+                width: screen.visibleFrame.width,
+                height: 3
+            )
+            : CGRect(
+                x: screen.frame.minX,
+                y: screen.visibleFrame.minY,
+                width: 3,
+                height: screen.visibleFrame.height
+            )
         if edgeZone.contains(pointer) {
             if let start = edgeDwellStart {
                 if now.timeIntervalSince(start) >= revealDwell {
@@ -332,7 +445,7 @@ final class SidebarWindowController: NSObject {
             context.duration = animationDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             panel.animator().alphaValue = revealed ? 1 : 0
-            cornersPanel?.animator().alphaValue = revealed ? 1 : 0
+            cornersPanel?.animator().alphaValue = revealed && !preferences.isBottom ? 1 : 0
         }
     }
 }
