@@ -153,6 +153,7 @@ final class TileStore: ObservableObject {
 
     func syncPreferencesFromSystemDockIfNeeded() {
         addClaudeActivityWidgetOnceIfNeeded()
+        addWeatherWidgetOnceIfNeeded()
 
         guard !hasImportedSystemDockPreferences else {
             return
@@ -210,6 +211,32 @@ final class TileStore: ObservableObject {
     /// already existed, so the starter-widget seeding above never ran for
     /// it. Insert it once, after the last widget, and never again: if the
     /// user removes it, it stays removed.
+    /// Adds the weather widget once, after the other widgets, for the
+    /// sidebar's widget rows. Removed later, it stays removed.
+    private func addWeatherWidgetOnceIfNeeded() {
+        let key = "docky.fork.didAddWeatherWidget"
+        guard !defaults.bool(forKey: key) else {
+            return
+        }
+        defaults.set(true, forKey: key)
+
+        let pinnedItems = preferences.pinnedItems
+        guard !pinnedItems.isEmpty,
+              !pinnedItems.contains(where: { $0.kind == .widget && $0.widgetKind == .weather }) else {
+            return
+        }
+
+        let insertionIndex = pinnedItems.lastIndex(where: { $0.kind == .widget }).map { $0 + 1 } ?? pinnedItems.count
+        insertPinnedItem(
+            .widget(
+                kind: .weather,
+                ownerBundleIdentifier: WidgetOwnerBundleIdentifiers.weather,
+                span: .three
+            ),
+            at: insertionIndex
+        )
+    }
+
     private func addClaudeActivityWidgetOnceIfNeeded() {
         let key = "docky.fork.didAddClaudeActivityWidget"
         guard !defaults.bool(forKey: key) else {

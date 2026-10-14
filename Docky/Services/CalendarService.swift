@@ -425,6 +425,9 @@ struct CalendarEventSnapshot: Equatable {
     let responseStatus: CalendarResponseStatus
     /// Display name of whoever sent the invitation; empty when unknown.
     let organizerName: String
+    /// From a calendar that only informs (public holidays, the clock
+    /// change, birthdays), not one of the person's own appointments.
+    var isInformational: Bool = false
 
     nonisolated init(event: EKEvent) {
         eventIdentifier = event.eventIdentifier ?? event.calendarItemIdentifier
@@ -436,6 +439,8 @@ struct CalendarEventSnapshot: Equatable {
         isAllDay = event.isAllDay
         location = event.location?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         calendarTitle = event.calendar.title
+        isInformational = event.calendar.type == .birthday
+            || Self.informationalTitles.contains { event.calendar.title.localizedCaseInsensitiveContains($0) }
         color = NSColor(cgColor: event.calendar.cgColor) ?? .white
         quickJoinURL = Self.resolveQuickJoinURL(for: event, location: location)
         responseStatus = Self.responseStatus(for: event)
@@ -494,6 +499,12 @@ struct CalendarEventSnapshot: Equatable {
         self.organizerName = organizerName
     }
     #endif
+
+    /// Names of the holiday calendars macOS and Google offer, in French and
+    /// English; the clock change comes with them.
+    private nonisolated static let informationalTitles = [
+        "férié", "ferie", "fête", "fete", "holiday", "vacances scolaires", "anniversaire", "birthday",
+    ]
 
     private nonisolated static func resolveQuickJoinURL(for event: EKEvent, location: String) -> URL? {
         if let directURL = normalizedJoinURL(event.url) {

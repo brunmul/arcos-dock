@@ -128,7 +128,7 @@ struct SystemStatusWidgetTileView: View {
     /// Hover panel: every figure spelled out, one row per resource.
     private func expandedPanel(snapshot: SystemStatusSnapshot, size: CGSize) -> some View {
         let base = min(max(min(size.width, size.height) * 0.058, 11), 15)
-        let usage = snapshot.metrics.filter { $0.kind != .network }
+        let usage = snapshot.metrics.filter { $0.kind != .network } + (snapshot.gpuMetric.map { [$0] } ?? [])
 
         return VStack(alignment: .leading, spacing: base * 0.85) {
             ForEach(usage) { metric in
@@ -221,6 +221,7 @@ struct SystemStatusWidgetTileView: View {
         case .disk: "SSD"
         case .cpu: "CPU"
         case .memory: "Memory"
+        case .gpu: "GPU"
         case .network: "Network"
         }
     }
@@ -231,7 +232,7 @@ struct SystemStatusWidgetTileView: View {
             return "\(byteText(snapshot.diskFreeBytes, style: .file)) free of \(byteText(snapshot.diskTotalBytes, style: .file))"
         case .memory:
             return "\(byteText(snapshot.usedMemoryBytes, style: .memory)) of \(byteText(snapshot.totalMemoryBytes, style: .memory))"
-        case .cpu, .network:
+        case .cpu, .gpu, .network:
             return nil
         }
     }
@@ -433,6 +434,16 @@ struct SystemStatusWidgetTileView: View {
             }
 
             return .systemPurple
+        case .gpu:
+            if metric.progress >= 0.85 {
+                return .systemRed
+            }
+
+            if metric.progress >= 0.65 {
+                return .systemOrange
+            }
+
+            return .systemGreen
         case .network:
             if metric.progress >= 0.75 {
                 return .systemBlue

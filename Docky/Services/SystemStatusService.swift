@@ -7,6 +7,7 @@ import AppKit
 import Combine
 import Darwin
 import Foundation
+import IOKit
 
 final class SystemStatusService: ObservableObject {
     static let shared = SystemStatusService()
@@ -68,6 +69,7 @@ final class SystemStatusService: ObservableObject {
         let memorySample = Self.loadMemorySample()
         let networkCounters = Self.loadNetworkCounters(at: now)
         let diskSample = Self.loadDiskSample()
+        let gpuUsagePercent = Self.loadGPUUsagePercent()
 
         let cpuUsagePercent = if let cpuSample, let previousCPUSample {
             Self.cpuUsagePercent(from: previousCPUSample, to: cpuSample)
@@ -98,7 +100,8 @@ final class SystemStatusService: ObservableObject {
                 receivedBytesPerSecond: networkThroughput.receivedBytesPerSecond,
                 sentBytesPerSecond: networkThroughput.sentBytesPerSecond,
                 diskUsedBytes: diskSample?.usedBytes ?? 0,
-                diskTotalBytes: diskSample?.totalBytes ?? 0
+                diskTotalBytes: diskSample?.totalBytes ?? 0,
+                gpuUsagePercent: gpuUsagePercent
             )
         } else {
             snapshot = nil
@@ -106,6 +109,34 @@ final class SystemStatusService: ObservableObject {
 
         lastRefreshDate = now
         isLoading = false
+    }
+
+    /// How busy the graphics processor is, as Activity Monitor's GPU
+    /// History reads it: the "Device Utilization %" the GPU's driver
+    /// publishes in the I/O registry. Nil when no GPU publishes it.
+    private static func loadGPUUsagePercent() -> Double? {
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOAccelerator"), &iterator) == KERN_SUCCESS else {
+            return nil
+        }
+        defer { IOObjectRelease(iterator) }
+
+        var highest: Double?
+        var service = IOIteratorNext(iterator)
+        while service != 0 {
+            defer {
+                IOObjectRelease(service)
+                service = IOIteratorNext(iterator)
+            }
+            var properties: Unmanaged<CFMutableDictionary>?
+            guard IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS,
+                  let dictionary = properties?.takeRetainedValue() as? [String: Any],
+                  let statistics = dictionary["PerformanceStatistics"] as? [String: Any],
+                  let usage = statistics["Device Utilization %"] as? NSNumber
+            else { continue }
+            highest = max(highest ?? 0, usage.doubleValue)
+        }
+        return highest.map { min(100, max(0, $0)) }
     }
 
     /// How full the internal startup disk is. Read from the volume that
@@ -280,6 +311,21 @@ struct SystemStatusSnapshot: Equatable {
     /// Zero when the startup disk could not be read.
     let diskUsedBytes: UInt64
     let diskTotalBytes: UInt64
+    /// Nil when the GPU's load could not be read.
+    var gpuUsagePercent: Double? = nil
+
+    /// The GPU's load, for the hover panel only: the dock tile keeps its
+    /// own columns.
+    var gpuMetric: SystemStatusMetricSnapshot? {
+        gpuUsagePercent.map { usage in
+            SystemStatusMetricSnapshot(
+                kind: .gpu,
+                primaryText: "\(Int(usage.rounded()))%",
+                secondaryText: "GPU",
+                progress: min(1, max(0, usage / 100))
+            )
+        }
+    }
 
     var totalNetworkBytesPerSecond: Double {
         receivedBytesPerSecond + sentBytesPerSecond
@@ -392,6 +438,7 @@ enum SystemStatusMetricKind: String, CaseIterable, Identifiable {
     case disk
     case cpu
     case memory
+    case gpu
     case network
 
     var id: String {
@@ -406,6 +453,8 @@ enum SystemStatusMetricKind: String, CaseIterable, Identifiable {
             "cpu"
         case .memory:
             "memorychip"
+        case .gpu:
+            "cube.transparent"
         case .network:
             "network"
         }
