@@ -90,22 +90,16 @@ final class ChromeFaviconStore: ObservableObject {
         snapshotDate = Date()
 
         let fileManager = FileManager.default
-        let chrome = fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Google/Chrome", isDirectory: true)
         let temporary = fileManager.temporaryDirectory
             .appendingPathComponent("DockyChromeFavicons", isDirectory: true)
         try? fileManager.createDirectory(at: temporary, withIntermediateDirectories: true)
 
-        guard let profiles = try? fileManager.contentsOfDirectory(atPath: chrome.path) else {
-            snapshotURLs = []
-            return
-        }
-
+        // Chrome's profiles, then Dia's: both keep Chromium's Favicons file.
         var copies: [URL] = []
-        for profile in profiles.sorted() where profile == "Default" || profile.hasPrefix("Profile ") {
-            let source = chrome.appendingPathComponent(profile).appendingPathComponent("Favicons")
+        for (number, profile) in SupportedBrowser.profileDirectories().enumerated() {
+            let source = profile.appendingPathComponent("Favicons")
             guard fileManager.fileExists(atPath: source.path) else { continue }
-            let copy = temporary.appendingPathComponent(profile.replacingOccurrences(of: " ", with: "-"))
+            let copy = temporary.appendingPathComponent("\(number)-\(profile.lastPathComponent.replacingOccurrences(of: " ", with: "-"))")
             try? fileManager.removeItem(at: copy)
             do {
                 try fileManager.copyItem(at: source, to: copy)

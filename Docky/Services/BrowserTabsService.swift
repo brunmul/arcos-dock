@@ -2,25 +2,63 @@
 //  BrowserTabsService.swift
 //  Docky
 //
-//  The open tabs of Chrome, so the sidebar can list them among the apps,
-//  each site as its own row, the way Arc mixes them.
+//  The open tabs of the browser, Chrome or Dia, so the sidebar can list
+//  them among the apps, each site as its own row, the way Arc mixes them.
 //
-//  Chrome answers AppleScript: the list of its windows and their tabs,
-//  which tab is active, and commands to switch to a tab or close it. The
-//  list is read again every 1.5 s while Chrome runs, a few bulk requests
-//  per window rather than several per tab; the first read asks
-//  macOS whether Docky may control Chrome, and the user answers.
+//  Both answer AppleScript: the list of their windows and tabs, which tab
+//  is active, and commands to switch to a tab or close it. Their
+//  dictionaries differ (Chrome has an active tab index, Dia an isFocused
+//  flag per tab and a `focus` command), so each has its own scripts. The
+//  list is read again every 1.5 s while the browser runs; the first read
+//  asks macOS whether Docky may control it, and the user answers.
 //
-//  Nothing is sent to Chrome while it is not running: a script addressed
-//  to an app launches it.
+//  One browser at a time: the default browser when it is a supported one,
+//  unless only the other is running.
+//
+//  Nothing is sent to a browser while it is not running: a script
+//  addressed to an app launches it.
 //
 
 import AppKit
 import Combine
 import Foundation
 
+/// The browsers whose tabs the sidebar can list.
+enum SupportedBrowser: String, CaseIterable {
+    case chrome = "com.google.Chrome"
+    case dia = "company.thebrowser.dia"
+
+    var bundleIdentifier: String { rawValue }
+
+    /// Where the browser keeps its profiles ("Default", "Profile 1"…),
+    /// each with Chromium's Bookmarks and Favicons files.
+    var profilesDirectory: URL {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        switch self {
+        case .chrome: return home.appendingPathComponent("Library/Application Support/Google/Chrome", isDirectory: true)
+        case .dia: return home.appendingPathComponent("Library/Application Support/Dia/User Data", isDirectory: true)
+        }
+    }
+
+    var isRunning: Bool {
+        !NSRunningApplication.runningApplications(withBundleIdentifier: rawValue).isEmpty
+    }
+
+    /// The profile folders of every supported browser, for bookmarks and
+    /// favicons.
+    static func profileDirectories() -> [URL] {
+        allCases.flatMap { browser -> [URL] in
+            let root = browser.profilesDirectory
+            guard let names = try? FileManager.default.contentsOfDirectory(atPath: root.path) else { return [] }
+            return names.sorted()
+                .filter { $0 == "Default" || $0.hasPrefix("Profile ") }
+                .map { root.appendingPathComponent($0, isDirectory: true) }
+        }
+    }
+}
+
 struct BrowserTab: Identifiable, Hashable {
-    /// Chrome hands its ids out as text.
+    /// The browser hands its ids out as text.
     let windowID: String
     let tabID: String
     /// Position in its window, from 1, as Chrome counts it.
@@ -44,31 +82,52 @@ struct BrowserTab: Identifiable, Hashable {
 final class BrowserTabsService: ObservableObject {
     static let shared = BrowserTabsService()
 
-    static let browserBundleIdentifier = "com.google.Chrome"
+    /// The browser whose tabs are listed, for the views that tell its
+    /// app row and its tabs apart.
+    static var browserBundleIdentifier: String { shared.browser.bundleIdentifier }
 
-    /// Chrome's tabs, front window first. Nil while Chrome is not running,
+    /// The browser whose tabs are listed (`preferredBrowser()`).
+    @Published private(set) var browser: SupportedBrowser = .chrome
+
+    /// The browser's tabs, front window first. Nil while it is not running,
     /// has not answered, or may not be controlled: the sidebar then shows
-    /// Chrome as an ordinary app.
+    /// it as an ordinary app.
     @Published private(set) var tabs: [BrowserTab]?
 
     private var timer: Timer?
     private var isReading = false
 
     private init() {
+        browser = Self.preferredBrowser()
         timer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             self?.refresh()
         }
         refresh()
     }
 
-    private var isBrowserRunning: Bool {
-        !NSRunningApplication.runningApplications(withBundleIdentifier: Self.browserBundleIdentifier).isEmpty
+    /// The default browser when it is Chrome or Dia and either it runs or
+    /// neither does; otherwise the supported one that runs.
+    private static func preferredBrowser() -> SupportedBrowser {
+        let running = SupportedBrowser.allCases.filter(\.isRunning)
+        let defaultBrowser = URL(string: "https://example.com")
+            .flatMap { NSWorkspace.shared.urlForApplication(toOpen: $0) }
+            .flatMap { Bundle(url: $0)?.bundleIdentifier }
+            .flatMap(SupportedBrowser.init(rawValue:))
+        if let defaultBrowser, running.isEmpty || running.contains(defaultBrowser) {
+            return defaultBrowser
+        }
+        return running.first ?? defaultBrowser ?? .chrome
     }
 
     // MARK: - Reading
 
     func refresh() {
-        guard isBrowserRunning else {
+        let preferred = Self.preferredBrowser()
+        if preferred != browser {
+            browser = preferred
+            tabs = nil
+        }
+        guard browser.isRunning else {
             if tabs != nil {
                 tabs = nil
             }
@@ -77,12 +136,14 @@ final class BrowserTabsService: ObservableObject {
         guard !isReading else { return }
         isReading = true
 
+        let browser = browser
         Task { [weak self] in
-            let result = try? await AppleScriptService.shared.descriptor(source: Self.listScript)
+            let result = try? await AppleScriptService.shared.descriptor(source: Self.listScript(for: browser))
             let parsed = result.flatMap(Self.parse).map(Self.removingWebAppWindows)
             await MainActor.run {
                 guard let self else { return }
                 self.isReading = false
+                guard self.browser == browser else { return }
                 if self.tabs != parsed {
                     self.tabs = parsed
                 }
@@ -94,13 +155,59 @@ final class BrowserTabsService: ObservableObject {
     /// front, then the ids, addresses and titles of all its tabs at once.
     /// Asking for every tab's property in one go keeps Chrome to a few
     /// replies per window, and the script queue free for clicks.
-    private static let listScript = """
-    tell application id "\(browserBundleIdentifier)"
+    private static func listScript(for browser: SupportedBrowser) -> String {
+        browser == .dia ? diaListScript : chromeListScript
+    }
+
+    private static let chromeListScript = """
+    tell application id "\(SupportedBrowser.chrome.bundleIdentifier)"
         set output to {}
         set windowIndex to 0
         repeat with aWindow in windows
             set windowIndex to windowIndex + 1
             set end of output to {id of aWindow, active tab index of aWindow, (windowIndex = 1), id of every tab of aWindow, URL of every tab of aWindow, title of every tab of aWindow}
+        end repeat
+        return output
+    end tell
+    """
+
+    /// Dia has no active tab index: each tab says whether it is the one
+    /// shown. The same six fields are built tab by tab, the active index
+    /// found from that flag, and a tab that fails to answer is skipped.
+    private static let diaListScript = """
+    tell application id "\(SupportedBrowser.dia.bundleIdentifier)"
+        set output to {}
+        set windowIndex to 0
+        repeat with aWindow in windows
+            set windowIndex to windowIndex + 1
+            try
+                set tabIds to {}
+                set tabURLs to {}
+                set tabTitles to {}
+                set activeIndex to 0
+                set tabIndex to 0
+                repeat with aTab in tabs of aWindow
+                    try
+                        set tabID to (id of aTab) as text
+                        set tabURL to ""
+                        try
+                            set tabURL to (URL of aTab) as text
+                        end try
+                        set tabTitle to ""
+                        try
+                            set tabTitle to (title of aTab) as text
+                        end try
+                        set tabIndex to tabIndex + 1
+                        set end of tabIds to tabID
+                        set end of tabURLs to tabURL
+                        set end of tabTitles to tabTitle
+                        try
+                            if isFocused of aTab then set activeIndex to tabIndex
+                        end try
+                    end try
+                end repeat
+                set end of output to {(id of aWindow) as text, activeIndex, (windowIndex = 1), tabIds, tabURLs, tabTitles}
+            end try
         end repeat
         return output
     end tell
@@ -149,7 +256,7 @@ final class BrowserTabsService: ObservableObject {
 
     private static func webAppStartURLs() -> [String] {
         NSWorkspace.shared.runningApplications.compactMap { app in
-            guard app.bundleIdentifier?.hasPrefix("\(browserBundleIdentifier).app.") == true,
+            guard app.bundleIdentifier?.hasPrefix("\(SupportedBrowser.chrome.bundleIdentifier).app.") == true,
                   let bundleURL = app.bundleURL,
                   let info = Bundle(url: bundleURL)?.infoDictionary,
                   let start = info["CrAppModeShortcutURL"] as? String, !start.isEmpty
@@ -176,8 +283,17 @@ final class BrowserTabsService: ObservableObject {
                 isInFrontWindow: other.windowID == tab.windowID
             )
         }
+        if browser == .dia {
+            run("""
+            tell application id "\(browser.bundleIdentifier)"
+                \(Self.diaTabLoop(tab, command: "focus aTab"))
+                activate
+            end tell
+            """)
+            return
+        }
         run("""
-        tell application id "\(Self.browserBundleIdentifier)"
+        tell application id "\(browser.bundleIdentifier)"
             set aWindow to window id "\(tab.windowID)"
             if (count of tabs of aWindow) >= \(tab.index) and (id of tab \(tab.index) of aWindow as text) is "\(tab.tabID)" then
                 set active tab index of aWindow to \(tab.index)
@@ -198,8 +314,16 @@ final class BrowserTabsService: ObservableObject {
 
     func close(_ tab: BrowserTab) {
         tabs?.removeAll { $0.id == tab.id }
+        if browser == .dia {
+            run("""
+            tell application id "\(browser.bundleIdentifier)"
+                \(Self.diaTabLoop(tab, command: "close aTab"))
+            end tell
+            """)
+            return
+        }
         run("""
-        tell application id "\(Self.browserBundleIdentifier)"
+        tell application id "\(browser.bundleIdentifier)"
             close (tab id "\(tab.tabID)" of window id "\(tab.windowID)")
         end tell
         """)
@@ -211,10 +335,12 @@ final class BrowserTabsService: ObservableObject {
         let targets = tabs
         self.tabs = []
         let lines = targets.map { tab in
-            "close (tab id \"\(tab.tabID)\" of window id \"\(tab.windowID)\")"
+            browser == .dia
+                ? Self.diaTabLoop(tab, command: "close aTab")
+                : "close (tab id \"\(tab.tabID)\" of window id \"\(tab.windowID)\")"
         }
         run("""
-        tell application id "\(Self.browserBundleIdentifier)"
+        tell application id "\(browser.bundleIdentifier)"
             \(lines.joined(separator: "\n    "))
         end tell
         """)
@@ -243,7 +369,7 @@ final class BrowserTabsService: ObservableObject {
     /// window when it has none, and brings Chrome forward.
     func open(_ url: URL) {
         guard let browserURL = NSWorkspace.shared.urlForApplication(
-            withBundleIdentifier: Self.browserBundleIdentifier
+            withBundleIdentifier: browser.bundleIdentifier
         ) else {
             NSWorkspace.shared.open(url)
             return
@@ -255,6 +381,24 @@ final class BrowserTabsService: ObservableObject {
                 self?.refresh()
             }
         }
+    }
+
+    /// Dia's tabs are reached by walking its windows and tabs and comparing
+    /// ids, the way its own Raycast extension does.
+    private static func diaTabLoop(_ tab: BrowserTab, command: String) -> String {
+        """
+        repeat with aWindow in windows
+            if ((id of aWindow) as text) is "\(tab.windowID)" then
+                repeat with aTab in tabs of aWindow
+                    if ((id of aTab) as text) is "\(tab.tabID)" then
+                        \(command)
+                        exit repeat
+                    end if
+                end repeat
+                exit repeat
+            end if
+        end repeat
+        """
     }
 
     private func run(_ source: String) {

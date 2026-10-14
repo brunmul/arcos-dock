@@ -577,18 +577,12 @@ final class SidebarBookmarks {
     }
 
     private static func bookmarkFiles() -> [URL] {
-        let chrome = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Google/Chrome", isDirectory: true)
-        guard let profiles = try? FileManager.default.contentsOfDirectory(atPath: chrome.path) else { return [] }
         // "Bookmarks" holds the ones kept on this Mac; "AccountBookmarks",
         // the ones of the Google account Chrome is signed in to, which
-        // recent Chrome keeps apart (same format).
-        return profiles.sorted()
-            .filter { $0 == "Default" || $0.hasPrefix("Profile ") }
+        // recent Chrome keeps apart (same format). Dia keeps the same files.
+        SupportedBrowser.profileDirectories()
             .flatMap { profile in
-                ["Bookmarks", "AccountBookmarks"].map {
-                    chrome.appendingPathComponent(profile).appendingPathComponent($0)
-                }
+                ["Bookmarks", "AccountBookmarks"].map { profile.appendingPathComponent($0) }
             }
             .filter { FileManager.default.fileExists(atPath: $0.path) }
     }

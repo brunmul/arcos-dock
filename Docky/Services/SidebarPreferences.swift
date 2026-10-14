@@ -327,7 +327,7 @@ enum SidebarSection: String, CaseIterable {
         case .pinned: "Pinned Apps & Sites"
         case .folders: "Folders & Trash"
         case .openApps: "Open Apps"
-        case .tabs: "Chrome Tabs"
+        case .tabs: "Browser Tabs"
         case .widgets: "Widgets"
         }
     }
