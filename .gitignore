@@ -15,3 +15,5 @@ __pycache__/
 .docky-dev-state.txt
 
 .docky-dev-glyphs/
+
+**/xcuserdata/
