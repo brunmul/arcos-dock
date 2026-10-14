@@ -886,12 +886,12 @@ private struct SidebarWidgetDetail: View {
                 }
             } label: {
                 Image(systemName: isPinned ? "xmark" : "pin")
-                    .font(.system(size: 8.5, weight: .semibold))
-                    .foregroundStyle(isButtonHovered ? .primary : .tertiary)
-                    .frame(width: 18, height: 18)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(isButtonHovered ? .primary : .secondary)
+                    .frame(width: 20, height: 20)
                     .background(
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(Color.primary.opacity(isButtonHovered ? 0.10 : 0))
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(Color.primary.opacity(isButtonHovered ? 0.16 : 0.08))
                     )
                     .contentShape(Rectangle())
             }
@@ -934,7 +934,7 @@ private struct SidebarDetailPage<Content: View>: View {
             }
             .padding(.horizontal, 6)
             .frame(height: 20, alignment: .center)
-            .padding(.trailing, 20) // room for the pin
+            .padding(.trailing, 22) // room for the pin
 
             content()
         }
