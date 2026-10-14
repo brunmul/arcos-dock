@@ -12,8 +12,9 @@
 //  list is read again every 1.5 s while the browser runs; the first read
 //  asks macOS whether Docky may control it, and the user answers.
 //
-//  One browser at a time: the default browser when it is a supported one,
-//  unless only the other is running.
+//  One browser at a time: the one last brought forward while both run,
+//  otherwise the default browser when it is a supported one, unless only
+//  the other is running.
 //
 //  Nothing is sent to a browser while it is not running: a script
 //  addressed to an app launches it.
@@ -96,19 +97,39 @@ final class BrowserTabsService: ObservableObject {
 
     private var timer: Timer?
     private var isReading = false
+    /// The supported browser last brought to the front.
+    private var lastActiveBrowser: SupportedBrowser?
 
     private init() {
-        browser = Self.preferredBrowser()
+        if let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier {
+            lastActiveBrowser = SupportedBrowser(rawValue: frontmost)
+        }
+        browser = preferredBrowser()
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  let browser = app.bundleIdentifier.flatMap(SupportedBrowser.init(rawValue:))
+            else { return }
+            self?.lastActiveBrowser = browser
+            self?.refresh()
+        }
         timer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             self?.refresh()
         }
         refresh()
     }
 
-    /// The default browser when it is Chrome or Dia and either it runs or
+    /// The browser last brought forward when it still runs; otherwise the
+    /// default browser when it is Chrome or Dia and either it runs or
     /// neither does; otherwise the supported one that runs.
-    private static func preferredBrowser() -> SupportedBrowser {
+    private func preferredBrowser() -> SupportedBrowser {
         let running = SupportedBrowser.allCases.filter(\.isRunning)
+        if let lastActiveBrowser, running.contains(lastActiveBrowser) {
+            return lastActiveBrowser
+        }
         let defaultBrowser = URL(string: "https://example.com")
             .flatMap { NSWorkspace.shared.urlForApplication(toOpen: $0) }
             .flatMap { Bundle(url: $0)?.bundleIdentifier }
@@ -122,7 +143,7 @@ final class BrowserTabsService: ObservableObject {
     // MARK: - Reading
 
     func refresh() {
-        let preferred = Self.preferredBrowser()
+        let preferred = preferredBrowser()
         if preferred != browser {
             browser = preferred
             tabs = nil
@@ -145,6 +166,9 @@ final class BrowserTabsService: ObservableObject {
                 self.isReading = false
                 guard self.browser == browser else { return }
                 if self.tabs != parsed {
+                    #if DEBUG
+                    Self.logForDebugging("\(browser.bundleIdentifier): " + (parsed.map { "\($0.count) tabs, \($0.filter(\.isActive).count) active" } ?? "no answer"))
+                    #endif
                     self.tabs = parsed
                 }
             }
@@ -400,6 +424,22 @@ final class BrowserTabsService: ObservableObject {
         end repeat
         """
     }
+
+    #if DEBUG
+    /// Debug builds note each change of the tab list in the temporary
+    /// folder (docky-browser-tabs.log), to check a browser answers.
+    private static func logForDebugging(_ line: String) {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("docky-browser-tabs.log")
+        let entry = "\(Date()) \(line)\n"
+        if let handle = try? FileHandle(forWritingTo: url) {
+            handle.seekToEndOfFile()
+            handle.write(Data(entry.utf8))
+            try? handle.close()
+        } else {
+            try? Data(entry.utf8).write(to: url)
+        }
+    }
+    #endif
 
     private func run(_ source: String) {
         Task { [weak self] in
