@@ -1,157 +1,113 @@
-<div align="center">
+# Docky Sidebar
 
-<img src="docs/images/logo.png" width="128" alt="Docky logo">
+*[English below](#english)*
 
-# Docky
+Une barre latérale pour macOS, façon Arc / Dia, avec un look inspiré de Claude. C'est un fork personnel de [Docky](https://github.com/josejuanqm/docky) de José Juan Quintero, publié sous la même licence GPLv3.
 
-### The same old dock, on steroids. Now free and open source.
+## Ce que c'est
 
-Docky is a Dock replacement for macOS that elegantly replaces the system one. It
-brings the Dock back into reach: quieter, smarter, and native-feeling, with a
-configurable layout, widgets, a fullscreen Launchpad, a live window switcher,
-custom icons, and scripted actions.
+Au lieu d'un dock en bas de l'écran, Docky Sidebar pose une barre encastrée le long du bord gauche :
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)](https://getdocky.com)
-[![Universal](https://img.shields.io/badge/Apple%20Silicon%20%26%20Intel-Universal-orange)](https://getdocky.com)
-[![Website](https://img.shields.io/badge/getdocky.com-Download-brightgreen)](https://getdocky.com)
-[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/josejuanqm)
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/josejuanqm)
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/vAwVNtPSgE)
+- les apps épinglées et les dossiers en tuiles en haut ;
+- les apps ouvertes en lignes, qui se déplient sur leurs fenêtres ;
+- les onglets du navigateur (Chrome ou Dia) mêlés aux apps, et des sites épinglés ;
+- « New Window » et « New Tab » ouvrent une recherche d'apps, d'onglets, de favoris ou du web ;
+- des widgets compacts en bas (calendrier avec bouton Rejoindre et réponses aux invitations, stats du Mac, média en cours, météo, activité de Claude Code), avec le détail au survol ;
+- un mode rail (icônes seules), une variante en barre du bas, et des thèmes de couleur ;
+- les fenêtres sont repoussées pour ne jamais passer derrière la barre.
 
-[**Download**](https://getdocky.com) &nbsp;·&nbsp; [**Website**](https://getdocky.com) &nbsp;·&nbsp; [**Build from source**](#building-from-source)
+Le dock d'origine de Docky reste disponible (menu « … » → Switch to Dock).
 
-</div>
+## Installer
 
-<div align="center">
-  <img src="docs/images/hero.jpg" alt="Docky on macOS" width="900">
-</div>
+1. Téléchargez `Docky-Sidebar.zip` dans la page [Releases](../../releases) et décompressez-le.
+2. Glissez `Docky.app` dans le dossier Applications.
+3. L'app n'est pas signée par un développeur Apple, donc macOS la bloque au premier lancement. Pour l'ouvrir quand même :
+   - faites un clic droit sur `Docky.app` → **Ouvrir**, puis **Ouvrir** dans la fenêtre d'avertissement ;
+   - si macOS refuse encore, allez dans **Réglages Système → Confidentialité et sécurité**, tout en bas, et cliquez sur **Ouvrir quand même** ;
+   - ou, dans le Terminal : `xattr -dr com.apple.quarantine /Applications/Docky.app`.
 
-## Why Docky
+macOS 14 ou plus récent. Build universel (Apple Silicon et Intel).
 
-The Dock is the most-used surface on a Mac, and it has barely changed in years.
-Docky rebuilds it for focus: it can run alongside, mirror, or fully replace the
-system Dock, and it moves with your workflow instead of getting in the way.
+Attention : cette app utilise le même identifiant que Docky (`gt.quintero.Docky`). N'installez pas les deux en même temps.
 
-- **Free and open source.** No paid tier, no upsell. Licensed under GPLv3.
-- **Native-feeling.** A universal binary for Apple Silicon and Intel, notarized
-  by Apple.
-- **Yours to shape.** Pin what you reach for, arrange it how you think, and drop
-  in widgets and actions that match how you work.
+## Permissions demandées
 
-## Features
+macOS vous les demandera au fur et à mesure ; vous pouvez en refuser certaines, seules les fonctions concernées s'arrêtent.
 
-### Tiles and layout
+| Permission | Pourquoi |
+|---|---|
+| Accessibilité | Lister et activer les fenêtres, et les repousser hors de la barre. Indispensable. |
+| Automatisation (Chrome, Dia, Finder, System Events) | Lire et changer d'onglet, ouvrir des pages, actions sur les fichiers et les menus. |
+| Calendrier | Widget calendrier : prochains événements et réponses aux invitations. |
+| Rappels | Widget rappels. |
+| Localisation | Météo locale. |
 
-Add and arrange anything in one strip: apps, widgets, Smart Stacks, folders,
-spacers, and dividers. Pin what you reach for, drag to reorder, and let the
-layout follow your workflow.
+Si l'Accessibilité semble perdue après une mise à jour : retirez Docky de la liste dans Réglages Système → Confidentialité et sécurité → Accessibilité, puis rajoutez-le.
 
-<div align="center"><img src="docs/images/feature-layout.jpg" alt="Tiles and layout" width="820"></div>
+## Compiler soi-même
 
-### Window switcher, live
+Ouvrez `Docky.xcodeproj` dans Xcode, schéma **Docky**, puis Run. Voir [README.upstream.md](README.upstream.md) pour les détails du projet d'origine.
 
-A global, Cmd-Tab-style window switcher with live window previews, plus per-tile
-hover previews so you can see a window before you raise it.
+## Crédits et licence
 
-<div align="center"><img src="docs/images/feature-window-switcher.jpg" alt="Live window switcher" width="820"></div>
+- Projet d'origine : [Docky](https://github.com/josejuanqm/docky) par José Juan Quintero, sous GPLv3. Si vous voulez le vrai Docky, signé et à jour : [getdocky.com](https://getdocky.com).
+- Ce fork n'est pas affilié au projet d'origine, ni à Anthropic, Arc ou Dia.
+- Licence : [GPLv3](LICENSE), comme le projet d'origine.
 
-### Built-in Launchpad
+---
 
-A fullscreen, searchable app launcher with full keyboard navigation, its own
-layout, and an optional global shortcut.
+<a id="english"></a>
 
-<div align="center"><img src="docs/images/feature-launchpad.jpg" alt="Built-in Launchpad" width="820"></div>
+# Docky Sidebar (English)
 
-### Widgets in the dock
+A macOS sidebar in the manner of Arc / Dia, with a Claude-inspired look. It is a personal fork of [Docky](https://github.com/josejuanqm/docky) by José Juan Quintero, released under the same GPLv3 license.
 
-Built-in widgets (Calendar, Reminders, Batteries, System, Weather, Now Playing,
-and more) live right in the dock. Stack several into a single tile with **Smart
-Stacks** and cycle through them in place. Add community `.dockywidget` bundles
-through the widget store.
+## What it is
 
-<div align="center"><img src="docs/images/feature-widgets.jpg" alt="Widgets and Smart Stacks" width="820"></div>
+Instead of a dock along the bottom, Docky Sidebar sets a bar into the left edge of the screen:
 
-### Rich app folders
+- pinned apps and folders as tiles at the top;
+- open apps as rows that expand into their windows;
+- browser tabs (Chrome or Dia) listed with the apps, and pinned sites;
+- "New Window" and "New Tab" open a search across apps, tabs, bookmarks and the web;
+- compact widgets at the bottom (calendar with Join button and invitation replies, Mac stats, now playing, weather, Claude Code activity), with details on hover;
+- a compact rail (icons only), a bottom-bar variant, and color themes;
+- windows are pushed aside so nothing ever sits behind the bar.
 
-Group apps into folders with nested navigation, Quick Look, and drag-and-drop.
-Optionally show running apps inline so a folder doubles as a live workspace.
+Docky's original dock is still there (… menu → Switch to Dock).
 
-<div align="center"><img src="docs/images/feature-folders.jpg" alt="Rich app folders" width="820"></div>
+## Install
 
-### More
+1. Download `Docky-Sidebar.zip` from [Releases](../../releases) and unzip it.
+2. Drag `Docky.app` into Applications.
+3. The app is not signed with an Apple developer certificate, so macOS blocks it on first launch. To open it anyway:
+   - right-click `Docky.app` → **Open**, then **Open** in the warning;
+   - if macOS still refuses, go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**;
+   - or in Terminal: `xattr -dr com.apple.quarantine /Applications/Docky.app`.
 
-- **Custom app icons:** override the icon for any pinned, running, or
-  widget-backed app.
-- **Scripted actions:** catalog-backed AppleScript and menu-click automation,
-  plus curated commands.
-- **Themes and profiles:** themeable appearance and switchable configuration
-  profiles.
+Requires macOS 14 or later. Universal build (Apple Silicon and Intel).
 
-## Download
+Note: the app uses the same identifier as Docky (`gt.quintero.Docky`). Do not install both at once.
 
-Get the latest notarized build from [getdocky.com](https://getdocky.com), or grab
-a release from the [Releases page](https://github.com/josejuanqm/docky/releases).
+## Permissions
 
-### Homebrew
+macOS asks for these as features need them; refusing one only turns off what depends on it.
 
-```sh
-brew install --cask josejuanqm/tap/docky
-```
+| Permission | Why |
+|---|---|
+| Accessibility | List and activate windows, and keep them clear of the bar. Required. |
+| Automation (Chrome, Dia, Finder, System Events) | Read and switch tabs, open pages, file and menu actions. |
+| Calendar | Calendar widget: next events and invitation replies. |
+| Reminders | Reminders widget. |
+| Location | Local weather. |
 
-Updates are delivered in-app via Sparkle. No tap trust step is needed for a normal
-install. If you run Homebrew with `HOMEBREW_REQUIRE_TAP_TRUST=1`, trust the cask
-first with `brew trust --cask josejuanqm/tap/docky`.
+## Build from source
 
-Docky needs **Accessibility** and **Screen Recording** permissions to manage
-windows and render previews. It prompts for these on first launch.
+Open `Docky.xcodeproj` in Xcode, scheme **Docky**, then Run. See [README.upstream.md](README.upstream.md) for the original project's details.
 
-> [!NOTE]
-> Docky uses private SkyLight / CoreGraphics Services and Accessibility SPI (see
-> `Docky/Private/`) to position windows, capture previews, and drive the system
-> Dock. Because of this, **Docky cannot be distributed on the Mac App Store**.
-> It is built from source or distributed directly.
+## Credits and license
 
-## Building from source
-
-```sh
-git clone https://github.com/josejuanqm/docky.git
-cd docky
-open Docky.xcodeproj
-```
-
-Build and run the `Docky` scheme. Swift Package dependencies (Sparkle) resolve
-automatically on first build.
-
-### Requirements
-
-- macOS 14.0 (Sonoma) or later
-- Xcode 16 or later to build from source
-
-## Documentation
-
-- [External widget bundles](docs/external-widgets.md): the `.dockywidget` bundle
-  contract and how to build community widgets.
-
-## Supporting Docky
-
-Docky is free and open source with no paid tier. If it earns a place in your
-Dock, you can help fund ongoing development:
-
-- **[GitHub Sponsors](https://github.com/sponsors/josejuanqm)**: one-time or
-  monthly, with tiers from ☕ Coffee to ❤️ Patron.
-- **[Buy Me a Coffee](https://buymeacoffee.com/josejuanqm)**: a quick one-off
-  thank-you.
-
-Sponsors also get a supporter role in the [Docky Discord](https://discord.gg/vAwVNtPSgE).
-Supporters are credited in [SUPPORTERS.md](SUPPORTERS.md); sponsoring teams can
-have their logo featured there. Every bit helps keep Docky maintained and free.
-
-## Dependencies
-
-- [Sparkle](https://github.com/sparkle-project/Sparkle): software update
-  framework (BSD 3-Clause).
-
-## License
-
-[GNU General Public License v3.0](LICENSE). Copyright (C) 2026 Jose Quintero.
+- Original project: [Docky](https://github.com/josejuanqm/docky) by José Juan Quintero, GPLv3. For the real, signed and maintained Docky: [getdocky.com](https://getdocky.com).
+- This fork is not affiliated with the original project, nor with Anthropic, Arc or Dia.
+- License: [GPLv3](LICENSE), same as the original project.
