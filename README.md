@@ -1,113 +1,121 @@
-# Docky Sidebar
+# Arcos Dock
 
 *[English below](#english)*
 
-Une barre latérale pour macOS, façon Arc / Dia, avec un look inspiré de Claude. C'est un fork personnel de [Docky](https://github.com/josejuanqm/docky) de José Juan Quintero, publié sous la même licence GPLv3.
+**Arcos Dock** remplace le Dock de macOS par une barre latérale, inspirée de trois apps : **Arc** et **Dia** pour la barre qui mêle apps et onglets, et **Slack** pour les thèmes de couleur et la lecture rapide de ce qui demande votre attention. C'est un fork de [Docky](https://github.com/josejuanqm/docky) de José Juan Quintero, publié sous la même licence GPLv3.
 
-## Ce que c'est
+## Fonctions clés
 
-Au lieu d'un dock en bas de l'écran, Docky Sidebar pose une barre encastrée le long du bord gauche :
+- **Une barre encastrée, jamais flottante.** Elle est opaque et collée au bord gauche de l'écran. Les fenêtres sont repoussées, donc aucune ne passe derrière.
+- **Apps et onglets au même endroit, comme dans Arc et Dia.** Les onglets ouverts de Chrome ou de Dia s'affichent à côté des apps. Vous pouvez épingler un site comme une app, et une pastille montre ses non-lus (Gmail, Slack…).
+- **New Window et New Tab.** Une seule barre de recherche ouvre une app, un onglet déjà ouvert, un favori, une adresse ou une recherche web.
+- **Des apps épinglées et des dossiers en tuiles.** Les dossiers ressemblent aux projets Claude, avec un symbole en contour sur une couleur sourde. Les apps ouvertes se déplient pour montrer leurs fenêtres.
+- **Des widgets compacts, avec le détail au survol :**
+  - le calendrier : les prochains événements, un bouton Rejoindre la visio, et des réponses Oui / Peut-être / Non aux invitations ;
+  - les stats du Mac (processeur, mémoire, GPU, disque, réseau) ;
+  - le morceau en cours ;
+  - la météo ;
+  - l'activité de Claude Code.
+- **Des thèmes façon Slack**, à côté du thème clair et chaud par défaut. Le fond d'écran peut prendre les couleurs du thème.
+- **Des icônes cohérentes.** Arcos Dock cherche d'abord votre pack d'icônes, puis le favicon du site de l'app, puis un symbole coloré tiré de l'icône, et à défaut l'icône d'origine.
+- **Trois dispositions :** la barre complète, un rail d'icônes seules, ou une barre en bas de l'écran.
 
-- les apps épinglées et les dossiers en tuiles en haut ;
-- les apps ouvertes en lignes, qui se déplient sur leurs fenêtres ;
-- les onglets du navigateur (Chrome ou Dia) mêlés aux apps, et des sites épinglés ;
-- « New Window » et « New Tab » ouvrent une recherche d'apps, d'onglets, de favoris ou du web ;
-- des widgets compacts en bas (calendrier avec bouton Rejoindre et réponses aux invitations, stats du Mac, média en cours, météo, activité de Claude Code), avec le détail au survol ;
-- un mode rail (icônes seules), une variante en barre du bas, et des thèmes de couleur ;
-- les fenêtres sont repoussées pour ne jamais passer derrière la barre.
-
-Le dock d'origine de Docky reste disponible (menu « … » → Switch to Dock).
+Le dock d'origine de Docky reste disponible : menu « … » → Switch to Dock.
 
 ## Installer
 
-1. Téléchargez `Docky-Sidebar.zip` dans la page [Releases](../../releases) et décompressez-le.
-2. Glissez `Docky.app` dans le dossier Applications.
-3. L'app n'est pas signée par un développeur Apple, donc macOS la bloque au premier lancement. Pour l'ouvrir quand même :
-   - faites un clic droit sur `Docky.app` → **Ouvrir**, puis **Ouvrir** dans la fenêtre d'avertissement ;
-   - si macOS refuse encore, allez dans **Réglages Système → Confidentialité et sécurité**, tout en bas, et cliquez sur **Ouvrir quand même** ;
-   - ou, dans le Terminal : `xattr -dr com.apple.quarantine /Applications/Docky.app`.
+1. Téléchargez `Arcos-Dock.zip` depuis la page [Releases](../../releases), puis décompressez-le.
+2. Glissez l'app dans le dossier Applications.
+3. L'app n'est pas signée par un développeur Apple, donc macOS la bloque au premier lancement. Pour l'ouvrir quand même, au choix :
+   - faites un clic droit sur l'app → **Ouvrir**, puis cliquez sur **Ouvrir** dans l'avertissement ;
+   - si macOS refuse encore, ouvrez **Réglages Système → Confidentialité et sécurité**, descendez tout en bas et cliquez sur **Ouvrir quand même** ;
+   - dans le Terminal, lancez `xattr -dr com.apple.quarantine "/Applications/Arcos Dock.app"`.
 
-macOS 14 ou plus récent. Build universel (Apple Silicon et Intel).
+Il faut macOS 14 ou plus récent. L'app tourne sur Apple Silicon comme sur Intel.
 
-Attention : cette app utilise le même identifiant que Docky (`gt.quintero.Docky`). N'installez pas les deux en même temps.
+Arcos Dock garde l'identifiant de Docky (`gt.quintero.Docky`), donc n'installez pas les deux en même temps.
 
 ## Permissions demandées
 
-macOS vous les demandera au fur et à mesure ; vous pouvez en refuser certaines, seules les fonctions concernées s'arrêtent.
+macOS les demande au moment où une fonction en a besoin. Si vous en refusez une, seule cette fonction s'arrête.
 
 | Permission | Pourquoi |
 |---|---|
-| Accessibilité | Lister et activer les fenêtres, et les repousser hors de la barre. Indispensable. |
-| Automatisation (Chrome, Dia, Finder, System Events) | Lire et changer d'onglet, ouvrir des pages, actions sur les fichiers et les menus. |
-| Calendrier | Widget calendrier : prochains événements et réponses aux invitations. |
-| Rappels | Widget rappels. |
-| Localisation | Météo locale. |
+| Accessibilité | Lister et activer les fenêtres, et les tenir hors de la barre. Indispensable. |
+| Automatisation (Chrome, Dia, Finder, System Events) | Lire les onglets et passer de l'un à l'autre, ouvrir des pages, agir sur les fichiers et les menus. |
+| Calendrier | Afficher les prochains événements et répondre aux invitations. |
+| Rappels | Faire marcher le widget Rappels. |
+| Localisation | Afficher la météo locale. |
 
-Si l'Accessibilité semble perdue après une mise à jour : retirez Docky de la liste dans Réglages Système → Confidentialité et sécurité → Accessibilité, puis rajoutez-le.
+Si l'Accessibilité semble perdue après une mise à jour : retirez l'app de la liste dans Réglages Système → Confidentialité et sécurité → Accessibilité, puis ajoutez-la de nouveau.
 
 ## Compiler soi-même
 
-Ouvrez `Docky.xcodeproj` dans Xcode, schéma **Docky**, puis Run. Voir [README.upstream.md](README.upstream.md) pour les détails du projet d'origine.
+Ouvrez `Docky.xcodeproj` dans Xcode, choisissez le schéma **Docky**, puis cliquez sur Run. Les détails du projet d'origine sont dans [README.upstream.md](README.upstream.md).
 
 ## Crédits et licence
 
-- Projet d'origine : [Docky](https://github.com/josejuanqm/docky) par José Juan Quintero, sous GPLv3. Si vous voulez le vrai Docky, signé et à jour : [getdocky.com](https://getdocky.com).
-- Ce fork n'est pas affilié au projet d'origine, ni à Anthropic, Arc ou Dia.
+- Projet d'origine : [Docky](https://github.com/josejuanqm/docky) par José Juan Quintero, sous GPLv3. Pour le Docky officiel, signé et maintenu, allez sur [getdocky.com](https://getdocky.com).
+- Arcos Dock n'est affilié ni au projet d'origine, ni à The Browser Company (Arc, Dia), ni à Slack, ni à Anthropic.
 - Licence : [GPLv3](LICENSE), comme le projet d'origine.
 
 ---
 
 <a id="english"></a>
 
-# Docky Sidebar (English)
+# Arcos Dock (English)
 
-A macOS sidebar in the manner of Arc / Dia, with a Claude-inspired look. It is a personal fork of [Docky](https://github.com/josejuanqm/docky) by José Juan Quintero, released under the same GPLv3 license.
+**Arcos Dock** replaces the macOS Dock with a sidebar inspired by three apps: **Arc** and **Dia** for a bar that mixes apps and tabs, and **Slack** for its color themes and for showing at a glance what needs your attention. It is a fork of [Docky](https://github.com/josejuanqm/docky) by José Juan Quintero, released under the same GPLv3 license.
 
-## What it is
+## Key features
 
-Instead of a dock along the bottom, Docky Sidebar sets a bar into the left edge of the screen:
+- **A bar set into the screen edge, never floating.** It is opaque and sits flush against the left edge. Windows are pushed aside, so none ever sits behind it.
+- **Apps and tabs in one place, as in Arc and Dia.** Open tabs from Chrome or Dia appear next to your apps. You can pin a site like an app, and a badge shows its unread count (Gmail, Slack…).
+- **New Window and New Tab.** One search field opens an app, an open tab, a bookmark, an address or a web search.
+- **Pinned apps and folders as tiles.** Folders look like Claude projects, with an outlined symbol on a muted color. Open apps expand to show their windows.
+- **Compact widgets, with details on hover:**
+  - calendar: upcoming events, a Join button for video calls, and Yes / Maybe / No replies to invitations;
+  - Mac stats (CPU, memory, GPU, disk, network);
+  - now playing;
+  - weather;
+  - Claude Code activity.
+- **Slack-like themes**, next to the warm default theme. The desktop picture can follow the theme's colors.
+- **Consistent icons.** Arcos Dock looks first in your icon pack, then for the app's website icon, then for a colored symbol taken from the icon, and falls back to the original icon.
+- **Three layouts:** the full sidebar, an icons-only rail, or a bar along the bottom of the screen.
 
-- pinned apps and folders as tiles at the top;
-- open apps as rows that expand into their windows;
-- browser tabs (Chrome or Dia) listed with the apps, and pinned sites;
-- "New Window" and "New Tab" open a search across apps, tabs, bookmarks and the web;
-- compact widgets at the bottom (calendar with Join button and invitation replies, Mac stats, now playing, weather, Claude Code activity), with details on hover;
-- a compact rail (icons only), a bottom-bar variant, and color themes;
-- windows are pushed aside so nothing ever sits behind the bar.
-
-Docky's original dock is still there (… menu → Switch to Dock).
+Docky's original dock is still there: … menu → Switch to Dock.
 
 ## Install
 
-1. Download `Docky-Sidebar.zip` from [Releases](../../releases) and unzip it.
-2. Drag `Docky.app` into Applications.
-3. The app is not signed with an Apple developer certificate, so macOS blocks it on first launch. To open it anyway:
-   - right-click `Docky.app` → **Open**, then **Open** in the warning;
-   - if macOS still refuses, go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**;
-   - or in Terminal: `xattr -dr com.apple.quarantine /Applications/Docky.app`.
+1. Download `Arcos-Dock.zip` from the [Releases](../../releases) page and unzip it.
+2. Drag the app into Applications.
+3. The app is not signed with an Apple developer certificate, so macOS blocks it on first launch. To open it anyway, use one of these:
+   - right-click the app → **Open**, then click **Open** in the warning;
+   - if macOS still refuses, open **System Settings → Privacy & Security**, scroll to the bottom and click **Open Anyway**;
+   - in Terminal, run `xattr -dr com.apple.quarantine "/Applications/Arcos Dock.app"`.
 
-Requires macOS 14 or later. Universal build (Apple Silicon and Intel).
+It needs macOS 14 or later, and runs on both Apple Silicon and Intel.
 
-Note: the app uses the same identifier as Docky (`gt.quintero.Docky`). Do not install both at once.
+Arcos Dock keeps Docky's identifier (`gt.quintero.Docky`), so do not install both at once.
 
 ## Permissions
 
-macOS asks for these as features need them; refusing one only turns off what depends on it.
+macOS asks for each one when a feature needs it. If you refuse one, only that feature stops working.
 
 | Permission | Why |
 |---|---|
 | Accessibility | List and activate windows, and keep them clear of the bar. Required. |
-| Automation (Chrome, Dia, Finder, System Events) | Read and switch tabs, open pages, file and menu actions. |
-| Calendar | Calendar widget: next events and invitation replies. |
-| Reminders | Reminders widget. |
-| Location | Local weather. |
+| Automation (Chrome, Dia, Finder, System Events) | Read tabs and switch between them, open pages, act on files and menus. |
+| Calendar | Show upcoming events and reply to invitations. |
+| Reminders | Run the Reminders widget. |
+| Location | Show local weather. |
 
 ## Build from source
 
-Open `Docky.xcodeproj` in Xcode, scheme **Docky**, then Run. See [README.upstream.md](README.upstream.md) for the original project's details.
+Open `Docky.xcodeproj` in Xcode, choose the **Docky** scheme, then click Run. The original project's details are in [README.upstream.md](README.upstream.md).
 
 ## Credits and license
 
-- Original project: [Docky](https://github.com/josejuanqm/docky) by José Juan Quintero, GPLv3. For the real, signed and maintained Docky: [getdocky.com](https://getdocky.com).
-- This fork is not affiliated with the original project, nor with Anthropic, Arc or Dia.
+- Original project: [Docky](https://github.com/josejuanqm/docky) by José Juan Quintero, GPLv3. For the official, signed and maintained Docky, go to [getdocky.com](https://getdocky.com).
+- Arcos Dock is not affiliated with the original project, The Browser Company (Arc, Dia), Slack or Anthropic.
 - License: [GPLv3](LICENSE), same as the original project.
