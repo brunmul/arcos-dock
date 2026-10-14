@@ -622,8 +622,10 @@ final class SidebarWidgetHoverController {
 
     /// Time the pointer may spend between the row and the panel.
     private let hideGrace: TimeInterval = 0.25
-    private static let gap: CGFloat = 10
-    private static let cornerRadius: CGFloat = 14
+    private static let gap: CGFloat = 8
+    /// Close to a macOS menu's: the detail reads as a menu off the bar,
+    /// not as a card.
+    private static let cornerRadius: CGFloat = 8
 
     private init() {}
 
@@ -688,7 +690,7 @@ final class SidebarWidgetHoverController {
     /// Turns the detail on screen into a window of its own, where it is.
     func pin(_ widget: WidgetTile) {
         guard pinnedPanels[widget.identifier] == nil else { return }
-        let size = Self.detailSize(for: widget.kind)
+        let (hostingView, size) = Self.makeDetailView(for: widget, isPinned: true)
         let frame = (shownWidgetIdentifier == widget.identifier ? panel?.frame : nil)
             ?? CGRect(origin: NSEvent.mouseLocation, size: size)
         hide()
@@ -697,10 +699,6 @@ final class SidebarWidgetHoverController {
         pinned.level = .floating
         pinned.isMovable = true
         pinned.isMovableByWindowBackground = true
-        let hostingView = SidebarFirstMouseHostingView(
-            rootView: SidebarWidgetDetail(widget: widget, size: size, cornerRadius: Self.cornerRadius, isPinned: true)
-        )
-        hostingView.sizingOptions = []
         pinned.contentView = hostingView
         pinned.setFrame(frame, display: true)
         pinned.orderFrontRegardless()
@@ -727,11 +725,7 @@ final class SidebarWidgetHoverController {
         let panel = panel ?? makePanel()
         self.panel = panel
 
-        let size = Self.detailSize(for: widget.kind)
-        let hostingView = SidebarFirstMouseHostingView(
-            rootView: SidebarWidgetDetail(widget: widget, size: size, cornerRadius: Self.cornerRadius, isPinned: false)
-        )
-        hostingView.sizingOptions = []
+        let (hostingView, size) = Self.makeDetailView(for: widget, isPinned: false)
         panel.contentView = hostingView
 
         let screen = NSScreen.screens.first { $0.frame.intersects(anchor) } ?? NSScreen.main
@@ -774,16 +768,32 @@ final class SidebarWidgetHoverController {
         return panel
     }
 
+    /// The detail's view and its size. The compact pages are as tall as
+    /// their rows, so a short list leaves no empty space below it.
+    private static func makeDetailView(for widget: WidgetTile, isPinned: Bool) -> (NSView, CGSize) {
+        var size = detailSize(for: widget.kind)
+        let fitsContent = SidebarWidgetDetail.hasCompactPage(widget.kind)
+        let hostingView = SidebarFirstMouseHostingView(
+            rootView: SidebarWidgetDetail(
+                widget: widget,
+                size: size,
+                fitsContent: fitsContent,
+                cornerRadius: cornerRadius,
+                isPinned: isPinned
+            )
+        )
+        hostingView.sizingOptions = []
+        if fitsContent {
+            size.height = min(size.height, ceil(hostingView.fittingSize.height))
+        }
+        return (hostingView, size)
+    }
+
+    /// The compact pages' width, and the most they may grow to.
     private static func detailSize(for kind: WidgetKind) -> CGSize {
         switch kind {
-        case .calendar, .calendarDate:
-            CGSize(width: 270, height: 250)
-        case .nowPlaying:
-            CGSize(width: 270, height: 112)
-        case .systemStatus:
-            CGSize(width: 270, height: 196)
-        case .weather:
-            CGSize(width: 270, height: 232)
+        case .calendar, .calendarDate, .nowPlaying, .systemStatus, .weather:
+            CGSize(width: 248, height: 320)
         case .claudeActivity:
             CGSize(width: 300, height: 220)
         default:
@@ -813,12 +823,22 @@ private final class SidebarFirstMouseHostingView<Content: View>: NSHostingView<C
 private struct SidebarWidgetDetail: View {
     let widget: WidgetTile
     let size: CGSize
+    /// As tall as its rows rather than `size.height`.
+    var fitsContent = false
     let cornerRadius: CGFloat
     /// Pinned: a window of its own, closed with ×. Otherwise the hover
     /// detail, with a pin to keep it open.
     let isPinned: Bool
 
+    @ObservedObject private var sidebar = SidebarPreferences.shared
     @State private var isButtonHovered = false
+
+    static func hasCompactPage(_ kind: WidgetKind) -> Bool {
+        switch kind {
+        case .systemStatus, .calendar, .calendarDate, .weather, .nowPlaying: true
+        default: false
+        }
+    }
 
     @ViewBuilder
     private var content: some View {
@@ -845,11 +865,12 @@ private struct SidebarWidgetDetail: View {
 
     var body: some View {
         content
-        .frame(width: size.width, height: size.height)
-        .background(SidebarPalette.surface)
+        .frame(width: size.width, height: fitsContent ? nil : size.height)
+        .fixedSize(horizontal: false, vertical: fitsContent)
+        .background(sidebar.theme.secondarySurface)
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
+                .strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.5)
         )
         .overlay(alignment: .topTrailing) {
             Button {
@@ -860,18 +881,22 @@ private struct SidebarWidgetDetail: View {
                 }
             } label: {
                 Image(systemName: isPinned ? "xmark" : "pin")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20, height: 20)
-                    .background(Circle().fill(Color.primary.opacity(isButtonHovered ? 0.12 : 0.06)))
-                    .contentShape(Circle())
+                    .font(.system(size: 8.5, weight: .semibold))
+                    .foregroundStyle(isButtonHovered ? .primary : .tertiary)
+                    .frame(width: 18, height: 18)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(Color.primary.opacity(isButtonHovered ? 0.10 : 0))
+                    )
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .onHover { isButtonHovered = $0 }
             .help(isPinned ? "Close" : "Keep Open in a Window")
-            .padding(6)
+            .padding(5)
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .sidebarThemeScheme(sidebar.theme)
         .onHover { hovering in
             if !isPinned {
                 SidebarWidgetHoverController.shared.panelHoverChanged(hovering)
@@ -903,12 +928,12 @@ private struct SidebarDetailPage<Content: View>: View {
                 }
             }
             .padding(.horizontal, 6)
-            .frame(height: 22, alignment: .center)
-            .padding(.trailing, 22) // room for the pin
+            .frame(height: 20, alignment: .center)
+            .padding(.trailing, 20) // room for the pin
 
             content()
         }
-        .padding(8)
+        .padding(5)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
@@ -933,10 +958,10 @@ private struct SidebarDetailRow<Value: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 6)
-        .frame(height: 26)
+        .frame(height: 22)
         .background(
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(Color.primary.opacity(isHovered && action != nil ? 0.05 : 0))
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Color.primary.opacity(isHovered && action != nil ? 0.07 : 0))
         )
         .contentShape(Rectangle())
         .onTapGesture { action?() }
@@ -1159,8 +1184,8 @@ private struct SidebarPlayingDetail: View {
                             .overlay(Image(systemName: "music.note").foregroundStyle(.tertiary))
                     }
                 }
-                .frame(width: 44, height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .frame(width: 40, height: 40)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 2) {
                     SidebarDetailText(text: state?.hasContent == true ? state!.title : "Not Playing")
@@ -1172,7 +1197,7 @@ private struct SidebarPlayingDetail: View {
                 control("forward.fill", "Next") { await media.skipToNext(for: $0) }
             }
             .padding(.horizontal, 6)
-            .padding(.top, 4)
+            .padding(.vertical, 3)
         }
     }
 
@@ -1181,5 +1206,32 @@ private struct SidebarPlayingDetail: View {
         return SidebarRowButton(systemName: symbol, help: help) {
             Task { await run(target) }
         }
+    }
+}
+
+// MARK: - Secondary surface
+
+extension SidebarTheme {
+    /// The theme's second color, in the manner of Slack's: a deeper shade
+    /// of the bar for the panels that open off it, so a detail reads as
+    /// part of the bar rather than a card laid over the desktop. With the
+    /// Claude theme, a slightly deeper paper, or a raised charcoal in dark
+    /// mode.
+    var secondarySurface: Color {
+        if isClaude {
+            return Color(nsColor: NSColor(name: nil) { appearance in
+                if appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua {
+                    return NSColor(srgbRed: 0.169, green: 0.165, blue: 0.157, alpha: 1)
+                }
+                return NSColor(srgbRed: 0.925, green: 0.918, blue: 0.882, alpha: 1)
+            })
+        }
+        func channel(_ shift: Int) -> Double {
+            Double(((top >> shift) & 0xFF) + ((bottom >> shift) & 0xFF)) / 2 / 255
+        }
+        // Halfway down the gradient, then deeper: a quarter towards black on
+        // a dark theme, a touch on a light one.
+        let keep = isDark ? 0.75 : 0.92
+        return Color(.sRGB, red: channel(16) * keep, green: channel(8) * keep, blue: channel(0) * keep)
     }
 }
