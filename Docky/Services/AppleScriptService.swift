@@ -49,6 +49,19 @@ final class AppleScriptService {
         return result
     }
 
+    /// Runs a script on the script queue and hands back its result.
+    func descriptor(source: String) async throws -> NSAppleEventDescriptor? {
+        try await withCheckedThrowingContinuation { continuation in
+            scriptQueue.async {
+                do {
+                    continuation.resume(returning: try self.executeDescriptor(source: source))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
     private func executeOnScriptQueue(source: String) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             scriptQueue.async {
