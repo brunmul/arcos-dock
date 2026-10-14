@@ -2,22 +2,21 @@
 //  ClaudeActivityService.swift
 //  Docky
 //
-//  Feeds the Claude widget with what Claude is doing right now, from two
-//  sources that work very differently:
+//  Feeds the Claude widget with what Claude Code is doing on this Mac, and
+//  nothing else.
 //
-//  1. Claude Code sessions running on this Mac (terminal, or the desktop
-//     app's Code tab in Local mode). Claude Code can run a command at each
-//     step of a session ("hooks"). Once connected, a one-line hook drops
-//     every event as a small JSON file into
-//     ~/Library/Application Support/Docky/ClaudeActivity/, and this
-//     service drains that folder once a second. That gives the prompt,
-//     the tool in use, and whether the session is waiting for an answer.
+//  Claude Code can run a command at each step of a session ("hooks"). Once
+//  connected, a one-line hook drops every event as a small JSON file into
+//  ~/Library/Application Support/Docky/ClaudeActivity/, and this service
+//  drains that folder once a second. That gives the prompt, the tool in
+//  use, and whether the session is waiting for an answer. It covers
+//  sessions started from a terminal or from the desktop app's Code tab in
+//  Local mode.
 //
-//  2. Tasks in the Claude desktop app, which run in the cloud. Nothing on
-//     this Mac reports their progress, so the only thing available is the
-//     title of the app's windows, read through the Accessibility-backed
-//     window registry Docky already keeps. That says which task is open,
-//     not which step it is on.
+//  Claude chats, cloud sessions and the web app report nothing to this Mac,
+//  so the widget does not show them. It used to show the title of the
+//  Claude app's window, which only said which conversation was on screen
+//  and read as if Claude were working on it.
 //
 //  Connecting Claude Code edits ~/.claude/settings.json, so it only ever
 //  happens from an explicit button press, keeps a one-time backup of the
@@ -25,7 +24,6 @@
 //
 
 import AppKit
-import ApplicationServices
 import Combine
 import Foundation
 
@@ -60,9 +58,6 @@ final class ClaudeActivityService: ObservableObject {
 
     /// Local Claude Code sessions, most recently active first.
     @Published private(set) var sessions: [ClaudeCodeSessionActivity] = []
-    /// Titles of the Claude desktop app's open windows.
-    @Published private(set) var desktopTaskTitles: [String] = []
-    @Published private(set) var isClaudeDesktopRunning = false
     @Published private(set) var isClaudeCodeConnected = false
     @Published private(set) var connectionError: String?
 
@@ -90,13 +85,8 @@ final class ClaudeActivityService: ObservableObject {
         self.timer = timer
     }
 
-    var hasAccessibilityAccess: Bool {
-        AXIsProcessTrusted()
-    }
-
     /// What the tile leads with: a session that needs the user first, then
-    /// one that is working, then the task open in the desktop app, then the
-    /// most recently finished session.
+    /// one that is working, then the most recently finished session.
     var headline: ClaudeActivityHeadline? {
         if let waiting = sessions.first(where: { $0.state == .waiting }) {
             return ClaudeActivityHeadline(
@@ -112,10 +102,6 @@ final class ClaudeActivityService: ObservableObject {
                 detail: working.step.isEmpty ? working.prompt : working.step,
                 state: .working
             )
-        }
-
-        if let title = desktopTaskTitles.first {
-            return ClaudeActivityHeadline(title: title, detail: "Open in Claude", state: .idle)
         }
 
         if let finished = sessions.first {
@@ -141,7 +127,6 @@ final class ClaudeActivityService: ObservableObject {
         if changedSessions || expired {
             publishSessions()
         }
-        refreshDesktopTasks()
     }
 
     /// Reads and removes every event file the hook has written since the
@@ -277,29 +262,6 @@ final class ClaudeActivityService: ObservableObject {
         let sorted = sessionsByID.values.sorted { $0.updatedAt > $1.updatedAt }
         if sorted != sessions {
             sessions = sorted
-        }
-    }
-
-    private func refreshDesktopTasks() {
-        let running = !NSRunningApplication
-            .runningApplications(withBundleIdentifier: Self.claudeDesktopBundleIdentifier)
-            .isEmpty
-        if running != isClaudeDesktopRunning {
-            isClaudeDesktopRunning = running
-        }
-
-        var titles: [String] = []
-        if running {
-            for window in WindowRegistry.shared.windows(forBundleIdentifier: Self.claudeDesktopBundleIdentifier) {
-                let title = Self.cleanedWindowTitle(window.windowTitle)
-                if !title.isEmpty, !titles.contains(title) {
-                    titles.append(title)
-                }
-            }
-        }
-
-        if titles != desktopTaskTitles {
-            desktopTaskTitles = titles
         }
     }
 
@@ -539,22 +501,5 @@ final class ClaudeActivityService: ObservableObject {
             return collapsed
         }
         return String(collapsed.prefix(limit - 1)) + "…"
-    }
-
-    /// Drops the app name some window titles carry ("Task - Claude") and
-    /// titles that are only the app name, which say nothing about the task.
-    private static func cleanedWindowTitle(_ title: String) -> String {
-        var cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        for separator in [" - ", " — ", " – ", " | "] {
-            let suffix = "\(separator)Claude"
-            if cleaned.hasSuffix(suffix) {
-                cleaned = String(cleaned.dropLast(suffix.count))
-            }
-            let prefix = "Claude\(separator)"
-            if cleaned.hasPrefix(prefix) {
-                cleaned = String(cleaned.dropFirst(prefix.count))
-            }
-        }
-        return cleaned == "Claude" ? "" : cleaned
     }
 }

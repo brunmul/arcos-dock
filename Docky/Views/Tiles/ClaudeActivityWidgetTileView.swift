@@ -2,11 +2,11 @@
 //  ClaudeActivityWidgetTileView.swift
 //  Docky
 //
-//  Dock tile and hover panel for what Claude is doing right now. The tile
-//  shows one headline (project or task on the first line, current step on
-//  the second); the hover panel lists every local Claude Code session and
-//  the tasks open in the Claude desktop app, and holds the button that
-//  connects Claude Code. Data comes from `ClaudeActivityService`.
+//  Dock tile and hover panel for what Claude Code is doing on this Mac. The
+//  tile shows one headline (project on the first line, current step on the
+//  second); the hover panel lists every local Claude Code session, says
+//  plainly that nothing else from Claude is shown, and holds the button
+//  that connects Claude Code. Data comes from `ClaudeActivityService`.
 //
 
 import AppKit
@@ -74,14 +74,14 @@ struct ClaudeActivityWidgetTileView: View {
 
             if renderedSpan != .one {
                 VStack(alignment: .leading, spacing: rowSpacing) {
-                    Text(headline?.title ?? "Claude")
+                    Text(headline?.title ?? "Claude Code")
                         .font(.system(size: titleFontSize, weight: .semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .frame(height: rowHeight)
 
-                    Text(headline?.detail ?? "Nothing running")
+                    Text(headline?.detail ?? "No session on this Mac")
                         .font(.system(size: titleFontSize * 0.86, weight: .medium))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -129,7 +129,7 @@ struct ClaudeActivityWidgetTileView: View {
 
         return ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: base) {
-                sectionTitle("On this Mac", base: base)
+                sectionTitle("Claude Code on this Mac", base: base)
 
                 if !activity.isClaudeCodeConnected {
                     Text("Connect Claude Code to see each step of the sessions running on this Mac.")
@@ -157,35 +157,10 @@ struct ClaudeActivityWidgetTileView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                sectionTitle("In the Claude app", base: base)
-
-                if !activity.isClaudeDesktopRunning {
-                    Text("Claude is not open.")
-                        .font(.system(size: base * 0.9))
-                        .foregroundStyle(.secondary)
-                } else if !activity.hasAccessibilityAccess {
-                    Text("Docky needs Accessibility access to read the title of the open task.")
-                        .font(.system(size: base * 0.9))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else if activity.desktopTaskTitles.isEmpty {
-                    Text("No task title to show.")
-                        .font(.system(size: base * 0.9))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(activity.desktopTaskTitles, id: \.self) { title in
-                        HStack(spacing: base * 0.5) {
-                            Image(systemName: "macwindow")
-                                .font(.system(size: base * 0.9, weight: .semibold))
-                                .foregroundStyle(.secondary)
-
-                            Text(title)
-                                .font(.system(size: base, weight: .semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(2)
-                        }
-                    }
-                }
+                Text("Only Claude Code sessions run on this Mac show here. Chats and tasks in the Claude app or on the web report nothing to Docky.")
+                    .font(.system(size: base * 0.85))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if activity.isClaudeCodeConnected {
                     panelButton("Disconnect Claude Code", base: base * 0.9) {

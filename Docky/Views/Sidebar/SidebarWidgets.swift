@@ -528,6 +528,8 @@ private struct SidebarSystemStatusWidget: View {
 
 // MARK: - Claude
 
+/// Claude Code sessions on this Mac, and nothing else from Claude: chats
+/// and cloud tasks report nothing Docky can read.
 private struct SidebarClaudeWidget: View {
     let widget: WidgetTile
     let isRail: Bool
@@ -548,7 +550,7 @@ private struct SidebarClaudeWidget: View {
             systemName: state == .waiting ? "exclamationmark.bubble.fill" : "sparkle",
             iconColor: iconColor,
             pulses: state == .working,
-            title: activity.headline?.title ?? "Claude",
+            title: activity.headline?.title ?? "Claude Code",
             isDimmed: activity.headline == nil,
             action: { ClaudeActivityService.shared.openClaudeDesktop() },
             trailing: {
@@ -572,7 +574,12 @@ private struct SidebarClaudeWidget: View {
         switch state {
         case .working: "working"
         case .waiting: "needs you"
-        case .idle: activity.headline == nil ? "idle" : "done"
+        case .idle:
+            if !activity.isClaudeCodeConnected {
+                "not connected"
+            } else {
+                activity.headline == nil ? "no session" : "done"
+            }
         }
     }
 }

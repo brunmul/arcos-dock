@@ -110,8 +110,8 @@ enum WidgetKind: Codable, Identifiable, Hashable {
     case weather
     case search
     case photoFrame
-    /// What Claude is working on: local Claude Code sessions and the task
-    /// open in the Claude desktop app. See `ClaudeActivityService`.
+    /// What Claude Code is doing in the sessions running on this Mac. See
+    /// `ClaudeActivityService`.
     case claudeActivity
     /// Widget supplied by a community bundle loaded at startup. The
     /// associated value is the plugin's stable identifier (e.g.
@@ -214,7 +214,7 @@ enum WidgetKind: Codable, Identifiable, Hashable {
         case .photoFrame:
             String(localized: "Photo Frame")
         case .claudeActivity:
-            String(localized: "Claude")
+            String(localized: "Claude Code")
         case .external(let identifier):
             ExternalWidgetRegistry.shared.metadata(for: identifier)?.displayName ?? identifier
         }
