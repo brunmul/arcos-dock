@@ -122,33 +122,64 @@ final class ChromeFaviconStore: ObservableObject {
         }
         defer { sqlite3_close(handle) }
 
+        // The browser maps a page to the icon of wherever it ended up: a
+        // page that redirected or was navigated away from in its tab keeps
+        // the next site's icon (a link page showing YouTube's). An icon is
+        // only taken when every page mapped to it is on the page's own
+        // site, or when the icon file itself is served from that site: a
+        // borrowed one falls through to the site's own icon.
+        guard let scheme = url.scheme, let host = url.host?.lowercased() else { return nil }
+        let site = Self.siteDomain(of: host)
+        let ownSiteOnly = """
+        AND (
+            f.url LIKE ?2 OR f.url LIKE ?3
+            OR NOT EXISTS (
+                SELECT 1 FROM icon_mapping o WHERE o.icon_id = m.icon_id
+                AND o.page_url NOT LIKE ?2 AND o.page_url NOT LIKE ?3
+            )
+        )
+        """
+        let siteBindings = ["%://\(site)/%", "%.\(site)/%"]
+
         let exact = """
         SELECT b.image_data FROM icon_mapping m
         JOIN favicon_bitmaps b ON b.icon_id = m.icon_id
+        JOIN favicons f ON f.id = m.icon_id
         WHERE m.page_url = ?1 AND length(b.image_data) > 0
+        \(ownSiteOnly)
         ORDER BY b.width DESC LIMIT 1
         """
-        if let data = firstBlob(handle, exact, binding: url.absoluteString) {
+        if let data = firstBlob(handle, exact, bindings: [url.absoluteString] + siteBindings) {
             return data
         }
 
-        guard let scheme = url.scheme, let host = url.host else { return nil }
         let sameHost = """
         SELECT b.image_data FROM icon_mapping m
         JOIN favicon_bitmaps b ON b.icon_id = m.icon_id
+        JOIN favicons f ON f.id = m.icon_id
         WHERE m.page_url LIKE ?1 AND length(b.image_data) > 0
+        \(ownSiteOnly)
         ORDER BY b.last_updated DESC, b.width DESC LIMIT 1
         """
-        return firstBlob(handle, sameHost, binding: "\(scheme)://\(host)/%")
+        return firstBlob(handle, sameHost, bindings: ["\(scheme)://\(host)/%"] + siteBindings)
     }
 
-    private static func firstBlob(_ handle: OpaquePointer?, _ sql: String, binding value: String) -> Data? {
+    /// The host's last two labels ("mail.google.com" → "google.com"), close
+    /// enough to tell one site from another here.
+    private static func siteDomain(of host: String) -> String {
+        let labels = host.split(separator: ".")
+        return labels.count > 2 ? labels.suffix(2).joined(separator: ".") : host
+    }
+
+    private static func firstBlob(_ handle: OpaquePointer?, _ sql: String, bindings: [String]) -> Data? {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK else { return nil }
         defer { sqlite3_finalize(statement) }
 
         let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-        sqlite3_bind_text(statement, 1, value, -1, transient)
+        for (offset, value) in bindings.enumerated() {
+            sqlite3_bind_text(statement, Int32(offset + 1), value, -1, transient)
+        }
         guard sqlite3_step(statement) == SQLITE_ROW,
               let bytes = sqlite3_column_blob(statement, 0)
         else { return nil }
