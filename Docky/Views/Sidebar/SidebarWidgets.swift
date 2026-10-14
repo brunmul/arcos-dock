@@ -773,19 +773,24 @@ final class SidebarWidgetHoverController {
     private static func makeDetailView(for widget: WidgetTile, isPinned: Bool) -> (NSView, CGSize) {
         var size = detailSize(for: widget.kind)
         let fitsContent = SidebarWidgetDetail.hasCompactPage(widget.kind)
-        let hostingView = SidebarFirstMouseHostingView(
-            rootView: SidebarWidgetDetail(
-                widget: widget,
-                size: size,
-                fitsContent: fitsContent,
-                cornerRadius: cornerRadius,
-                isPinned: isPinned
-            )
+        let detail = SidebarWidgetDetail(
+            widget: widget,
+            size: size,
+            fitsContent: fitsContent,
+            cornerRadius: cornerRadius,
+            isPinned: isPinned
         )
-        hostingView.sizingOptions = []
         if fitsContent {
-            size.height = min(size.height, ceil(hostingView.fittingSize.height))
+            // Measured apart: a hosting view with no sizing options reports
+            // no fitting size, which left the panel zero points tall.
+            let measured = NSHostingController(rootView: detail)
+                .sizeThatFits(in: CGSize(width: size.width, height: .greatestFiniteMagnitude))
+            if measured.height >= 40 {
+                size.height = min(size.height, ceil(measured.height))
+            }
         }
+        let hostingView = SidebarFirstMouseHostingView(rootView: detail)
+        hostingView.sizingOptions = []
         return (hostingView, size)
     }
 
