@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- A window with the sidebar set into its left edge -->
+  <rect x="200" y="250" width="624" height="524" rx="76" fill="none" stroke="#FAF6EE" stroke-width="40"/>
+  <path d="M276 250 H420 V774 H276 A76 76 0 0 1 200 698 V326 A76 76 0 0 1 276 250 Z" fill="#FAF6EE"/>
+  <!-- Pinned tiles, then rows -->
+  <rect x="246" y="306" width="60" height="60" rx="16" fill="#C96A4A"/>
+  <rect x="320" y="306" width="60" height="60" rx="16" fill="#C96A4A" opacity="0.55"/>
+  <rect x="246" y="410" width="134" height="30" rx="15" fill="#C96A4A"/>
+  <rect x="246" y="466" width="110" height="30" rx="15" fill="#C96A4A" opacity="0.55"/>
+  <rect x="246" y="522" width="122" height="30" rx="15" fill="#C96A4A" opacity="0.55"/>
+  <!-- Claude-like wave separator, then a widget row -->
+  <path d="M246 610 q17 -16 34 0 t34 0 t34 0 t34 0" fill="none" stroke="#C96A4A" stroke-width="10" stroke-linecap="round"/>
+  <rect x="246" y="650" width="134" height="64" rx="16" fill="#C96A4A" opacity="0.35"/>
+</svg>
