@@ -24,8 +24,11 @@
 //  are stored in `~/Library/Application Support/Docky/SidebarFavicons/`;
 //  an app with none is not asked about again for a week.
 //
-//  Each app's site receives one ordinary page request and one image
-//  request, once. Nothing is sent to any third party.
+//  The same lookup gives the sites open in Chrome's tabs their icon, by
+//  host (`icon(forSite:)`).
+//
+//  Each site receives one ordinary page request and one image request,
+//  once. Nothing is sent to any third party.
 //
 
 import AppKit
@@ -42,6 +45,8 @@ final class SidebarFaviconStore: ObservableObject {
     private var iconsByBundleIdentifier: [String: SidebarPackIcon] = [:]
     private var missingBundleIdentifiers: Set<String> = []
     private var inFlight: Set<String> = []
+    /// When each kept icon was last asked for again, this session.
+    private var checkedDates: [String: Date] = [:]
     private let defaults = UserDefaults.standard
 
     private static let failuresKey = "docky.fork.sidebar.faviconFailures"
@@ -95,28 +100,70 @@ final class SidebarFaviconStore: ObservableObject {
     /// for an app starts the search and returns nil; the view is redrawn
     /// when the icon arrives.
     func icon(forBundleIdentifier bundleIdentifier: String) -> SidebarPackIcon? {
-        if let cached = iconsByBundleIdentifier[bundleIdentifier] {
+        icon(forKey: bundleIdentifier) { Self.site(forBundleIdentifier: bundleIdentifier) }
+    }
+
+    /// The icon of a website open in a browser tab, by its host. A tab's
+    /// icon is drawn small, so the rules are looser than for an app: a
+    /// 16 px bitmap will do, and so will one on its own square. When the
+    /// host has none (a subdomain behind a sign-in page, say), its parent
+    /// domain is asked.
+    func icon(forSite host: String) -> SidebarPackIcon? {
+        icon(forKey: "site-\(host)", isSite: true) { host }
+    }
+
+    private func icon(forKey key: String, isSite: Bool = false, site: () -> String?) -> SidebarPackIcon? {
+        if let cached = iconsByBundleIdentifier[key] {
+            revalidateIfStale(key: key, isSite: isSite, site: site)
             return cached
         }
-        guard !missingBundleIdentifiers.contains(bundleIdentifier) else { return nil }
+        guard !missingBundleIdentifiers.contains(key) else { return nil }
 
-        if let stored = loadStoredIcon(forBundleIdentifier: bundleIdentifier) {
-            iconsByBundleIdentifier[bundleIdentifier] = stored
+        if let stored = loadStoredIcon(forBundleIdentifier: key) {
+            iconsByBundleIdentifier[key] = stored
+            revalidateIfStale(key: key, isSite: isSite, site: site)
             return stored
         }
 
-        guard let site = Self.site(forBundleIdentifier: bundleIdentifier), !failedRecently(bundleIdentifier) else {
-            missingBundleIdentifiers.insert(bundleIdentifier)
+        guard let site = site(), !failedRecently(key) else {
+            missingBundleIdentifiers.insert(key)
             return nil
         }
 
-        if !inFlight.contains(bundleIdentifier) {
-            inFlight.insert(bundleIdentifier)
+        if !inFlight.contains(key) {
+            inFlight.insert(key)
             Task { [weak self] in
-                await self?.fetch(bundleIdentifier: bundleIdentifier, site: site)
+                await self?.fetch(bundleIdentifier: key, sites: isSite ? Self.siteAndParent(site) : [site], isSite: isSite)
             }
         }
         return nil
+    }
+
+    /// A kept icon is asked for again once it is older than this, so a
+    /// site that changes its icon shows the new one: an hour for a site
+    /// open in a tab, a day for an app's site. The old icon stays on screen
+    /// until a new one has arrived, and stays for good if none does.
+    private static let siteRevalidationInterval: TimeInterval = 60 * 60
+    private static let appRevalidationInterval: TimeInterval = 24 * 60 * 60
+
+    private func revalidateIfStale(key: String, isSite: Bool, site: () -> String?) {
+        guard !inFlight.contains(key) else { return }
+        let interval = isSite ? Self.siteRevalidationInterval : Self.appRevalidationInterval
+        let lastChecked = checkedDates[key] ?? storedFileURL(forBundleIdentifier: key).flatMap { url in
+            (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        } ?? .distantPast
+        guard Date().timeIntervalSince(lastChecked) > interval, let site = site() else { return }
+
+        checkedDates[key] = Date()
+        inFlight.insert(key)
+        Task { [weak self] in
+            await self?.fetch(
+                bundleIdentifier: key,
+                sites: isSite ? Self.siteAndParent(site) : [site],
+                isSite: isSite,
+                isRevalidation: true
+            )
+        }
     }
 
     // MARK: - Site
@@ -155,7 +202,8 @@ final class SidebarFaviconStore: ObservableObject {
 
     private func loadStoredIcon(forBundleIdentifier bundleIdentifier: String) -> SidebarPackIcon? {
         guard let url = storedFileURL(forBundleIdentifier: bundleIdentifier),
-              let image = NSImage(contentsOf: url), image.isValid
+              let image = NSImage(contentsOf: url), image.isValid,
+              Self.hasVisiblePixels(image)
         else { return nil }
         return Self.makeIcon(from: image)
     }
@@ -183,12 +231,31 @@ final class SidebarFaviconStore: ObservableObject {
 
     // MARK: - Fetching
 
-    private func fetch(bundleIdentifier: String, site: String) async {
+    /// "drive.google.com" -> ["drive.google.com", "google.com"].
+    private static func siteAndParent(_ host: String) -> [String] {
+        let labels = host.split(separator: ".")
+        guard labels.count > 2 else { return [host] }
+        return [host, labels.suffix(2).joined(separator: ".")]
+    }
+
+    private func fetch(bundleIdentifier: String, sites: [String], isSite: Bool, isRevalidation: Bool = false) async {
         defer { inFlight.remove(bundleIdentifier) }
 
-        guard let pageURL = URL(string: "https://\(site)/") else {
+        for site in sites {
+            if await fetch(bundleIdentifier: bundleIdentifier, site: site, isSite: isSite) {
+                return
+            }
+        }
+        // A failed second look keeps the icon already found.
+        if !isRevalidation {
             recordFailure(bundleIdentifier)
-            return
+        }
+    }
+
+    /// True when an icon was found and kept.
+    private func fetch(bundleIdentifier: String, site: String, isSite: Bool) async -> Bool {
+        guard let pageURL = URL(string: "https://\(site)/") else {
+            return false
         }
 
         var candidates: [URL] = []
@@ -205,19 +272,27 @@ final class SidebarFaviconStore: ObservableObject {
         for candidate in candidates.prefix(6) {
             guard let file = await Self.download(candidate, limit: 2_000_000),
                   let image = NSImage(data: file.data), image.isValid,
-                  Self.isUsable(image)
+                  Self.isUsable(image, isSite: isSite)
             else { continue }
 
             let fileExtension = Self.fileExtension(for: file.finalURL, data: file.data)
             let destination = directoryURL.appendingPathComponent("\(bundleIdentifier).\(fileExtension)")
+            // A new icon in another format must not leave the old file to
+            // be found first next time.
+            for other in Self.fileExtensions where other != fileExtension {
+                try? FileManager.default.removeItem(at: directoryURL.appendingPathComponent("\(bundleIdentifier).\(other)"))
+            }
+            if let existing = try? Data(contentsOf: destination), existing == file.data {
+                try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: destination.path)
+                return true
+            }
             try? file.data.write(to: destination, options: .atomic)
 
             iconsByBundleIdentifier[bundleIdentifier] = Self.makeIcon(from: image)
             revision += 1
-            return
+            return true
         }
-
-        recordFailure(bundleIdentifier)
+        return false
     }
 
     private struct Download {
@@ -328,14 +403,43 @@ final class SidebarFaviconStore: ObservableObject {
         return largest
     }
 
-    /// Sharp enough, and a mark rather than a plate.
-    private static func isUsable(_ image: NSImage) -> Bool {
+    /// Sharp enough, and a mark rather than a plate. For a site's tab,
+    /// any icon of 16 px or more, plate or not.
+    private static func isUsable(_ image: NSImage, isSite: Bool) -> Bool {
         let hasVector = image.representations.contains { !($0 is NSBitmapImageRep) }
         if !hasVector {
             let pixelSide = image.representations.map { min($0.pixelsWide, $0.pixelsHigh) }.max() ?? 0
-            guard pixelSide >= minimumPixelSide else { return false }
+            guard pixelSide >= (isSite ? 16 : minimumPixelSide) else { return false }
         }
-        return !hasOpaqueCorners(image)
+        guard hasVisiblePixels(image) else { return false }
+        return isSite || !hasOpaqueCorners(image)
+    }
+
+    /// False for an icon that draws nothing here. Some SVG icons color
+    /// their shapes from a stylesheet (chatgpt.com's, since October 2026),
+    /// which macOS does not apply: the shapes come out with no fill.
+    private static func hasVisiblePixels(_ image: NSImage) -> Bool {
+        let side = 32
+        var rect = CGRect(x: 0, y: 0, width: side, height: side)
+        guard let cgImage = image.cgImage(forProposedRect: &rect, context: nil, hints: nil),
+              let context = CGContext(
+                data: nil,
+                width: side,
+                height: side,
+                bitsPerComponent: 8,
+                bytesPerRow: side * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              )
+        else { return false }
+
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: side, height: side))
+        guard let data = context.data else { return false }
+        let bytes = data.assumingMemoryBound(to: UInt8.self)
+        for pixel in 0..<(side * side) where bytes[pixel * 4 + 3] > 24 {
+            return true
+        }
+        return false
     }
 
     /// True when all four corners are solid: a square with its own

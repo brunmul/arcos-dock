@@ -54,6 +54,10 @@ enum SidebarIconGlyph {
         return cache
     }()
 
+    static func forget(key: String) {
+        cache.removeObject(forKey: key as NSString)
+    }
+
     /// Working size, in pixels. Large enough for a 20pt tile at 2x.
     private static let side = 96
 

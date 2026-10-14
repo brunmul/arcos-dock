@@ -9,10 +9,19 @@
 //
 
 import AppKit
+import Combine
 import UniformTypeIdentifiers
 
-final class IconCacheService {
+final class IconCacheService: ObservableObject {
     static let shared = IconCacheService()
+
+    /// Bumped when an app's icon changed on disk, so views redraw it.
+    @Published private(set) var revision = 0
+
+    /// When each app's bundle last changed, as seen when its icon was read.
+    private var bundleDates: [String: Date] = [:]
+    private let bundleDatesLock = NSLock()
+    private var bundleCheckTimer: Timer?
 
     private let cache: NSCache<NSString, NSImage> = {
         let cache = NSCache<NSString, NSImage>()
@@ -37,7 +46,78 @@ final class IconCacheService {
     /// gain in the dock and extra per-frame resampling work during magnification.
     private static let normalizedIconExtent: CGFloat = 256
 
-    private init() {}
+    private init() {
+        // An app rebuilt or updated while Docky runs keeps the same bundle
+        // identifier: its new icon would never be read. Each launch drops
+        // what was cached for that app, so the icon is read afresh.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didLaunchApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  let bundleIdentifier = app.bundleIdentifier
+            else { return }
+            self?.invalidate(bundleIdentifier: bundleIdentifier)
+        }
+
+        // An app rebuilt while it stays open (or while it is closed but
+        // shown as pinned) has no launch to catch: every 20 s, the bundles
+        // whose icons are cached are checked for a change on disk.
+        bundleCheckTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
+            self?.checkBundlesForChanges()
+        }
+    }
+
+    /// The latest change to the files an icon comes from: the bundle's
+    /// Info.plist and its Resources folder, rewritten by every build.
+    nonisolated private static func bundleDate(forBundleIdentifier bundleIdentifier: String) -> Date? {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) else { return nil }
+        let contents = url.appendingPathComponent("Contents")
+        let candidates = [contents.appendingPathComponent("Info.plist"), contents.appendingPathComponent("Resources")]
+        return candidates.compactMap { candidate in
+            (try? candidate.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        }.max()
+    }
+
+    private func rememberBundleDate(forBundleIdentifier bundleIdentifier: String) {
+        let date = Self.bundleDate(forBundleIdentifier: bundleIdentifier)
+        bundleDatesLock.lock()
+        bundleDates[bundleIdentifier] = date ?? .distantPast
+        bundleDatesLock.unlock()
+    }
+
+    private func checkBundlesForChanges() {
+        bundleDatesLock.lock()
+        let known = bundleDates
+        bundleDatesLock.unlock()
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let changed = known.filter { bundleIdentifier, seen in
+                guard let current = Self.bundleDate(forBundleIdentifier: bundleIdentifier) else { return false }
+                return current > seen
+            }.map(\.key)
+            guard !changed.isEmpty else { return }
+
+            DispatchQueue.main.async {
+                guard let self else { return }
+                for bundleIdentifier in changed {
+                    self.invalidate(bundleIdentifier: bundleIdentifier)
+                }
+                self.revision += 1
+            }
+        }
+    }
+
+    /// Forgets one app's icon, here and in the sidebar's derived images.
+    func invalidate(bundleIdentifier: String) {
+        cache.removeObject(forKey: "bundle:\(bundleIdentifier)" as NSString)
+        bundleDatesLock.lock()
+        bundleDates.removeValue(forKey: bundleIdentifier)
+        bundleDatesLock.unlock()
+        SidebarIconTrim.forget(key: bundleIdentifier)
+        SidebarIconGlyph.forget(key: bundleIdentifier)
+    }
 
     /// Fetches an icon from LaunchServices and normalizes its nominal size so
     /// downstream `resizable()` rendering downsamples a high-resolution
@@ -54,6 +134,7 @@ final class IconCacheService {
         if let cached = cache.object(forKey: key) { return cached }
         let image = loadIcon(forBundleIdentifier: bundleIdentifier)
         cache.setObject(image, forKey: key)
+        rememberBundleDate(forBundleIdentifier: bundleIdentifier)
         return image
     }
 
