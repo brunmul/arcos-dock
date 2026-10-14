@@ -8,6 +8,9 @@
 
 **Arcos Dock** remplace le Dock de macOS par une barre latérale, inspirée de trois apps : **Arc** et **Dia** pour la barre qui mêle apps et onglets, et **Slack** pour les thèmes de couleur et la lecture rapide de ce qui demande votre attention. C'est un fork de [Docky](https://github.com/josejuanqm/docky) de José Juan Quintero, publié sous la même licence GPLv3.
 
+<p align="center"><img src="docs/images/screens/sidebar.png" alt="Arcos Dock : la barre latérale à côté de Chrome" width="900"></p>
+<p align="center"><img src="docs/images/screens/rail.png" alt="Arcos Dock en mode rail, avec un autre thème" width="900"></p>
+
 ## Fonctions clés
 
 - **Une barre encastrée, jamais flottante.** Elle est opaque et collée au bord gauche de l'écran. Les fenêtres sont repoussées, donc aucune ne passe derrière.
@@ -72,6 +75,9 @@ Ouvrez `Docky.xcodeproj` dans Xcode, choisissez le schéma **Docky**, puis cliqu
 > **Based on [Docky](https://github.com/josejuanqm/docky)**, the open-source dock by José Juan Quintero. Arcos Dock keeps its whole foundation (window handling, Launchpad, widgets, folders) and turns it into a sidebar.
 
 **Arcos Dock** replaces the macOS Dock with a sidebar inspired by three apps: **Arc** and **Dia** for a bar that mixes apps and tabs, and **Slack** for its color themes and for showing at a glance what needs your attention. It is a fork of [Docky](https://github.com/josejuanqm/docky) by José Juan Quintero, released under the same GPLv3 license.
+
+<p align="center"><img src="docs/images/screens/sidebar.png" alt="Arcos Dock: the sidebar next to Chrome" width="900"></p>
+<p align="center"><img src="docs/images/screens/rail.png" alt="Arcos Dock as a compact rail, with another theme" width="900"></p>
 
 ## Key features
 
