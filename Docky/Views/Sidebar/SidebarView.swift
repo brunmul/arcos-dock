@@ -8,9 +8,9 @@
 //    header      the Apple mark, the full / compact toggle, and a menu
 //                (auto-hide, settings, back to the dock strip); then the
 //                greeting, the date and the time (`SidebarWelcome.swift`)
-//    pinned      two small blocks of tiles: the pinned apps, then the
-//                pinned folders and the Trash. A folder's tile lists its
-//                contents underneath
+//    pinned      a group that folds, two small blocks of tiles: the
+//                pinned apps, then the pinned folders and the Trash. A
+//                folder's tile lists its contents underneath
 //    open        two groups that fold, each with a "close all": Apps,
 //                every open app, a row unfolding into the app's windows,
 //                ending with "New Window"; then Web, one row per Chrome
@@ -41,6 +41,7 @@ struct SidebarView: View {
     @ObservedObject private var browserTabs = BrowserTabsService.shared
     @Bindable private var preferences = DockyPreferences.shared
 
+    @AppStorage("docky.fork.sidebar.foldsPinned") private var foldsPinned = false
     @AppStorage("docky.fork.sidebar.foldsApps") private var foldsApps = false
     @AppStorage("docky.fork.sidebar.foldsWeb") private var foldsWeb = false
 
@@ -125,9 +126,24 @@ struct SidebarView: View {
 
     /// Everything pinned to the dock, as two small blocks of tiles: the
     /// apps, then the folders and the Trash. The folder whose tile is
-    /// selected lists its contents underneath.
+    /// selected lists its contents underneath. It folds under its header
+    /// like Apps and Web.
     @ViewBuilder
     private var pinnedSection: some View {
+        SidebarGroupHeader(
+            title: "Pinned",
+            count: pinnedItems.count,
+            isFolded: foldsPinned,
+            toggle: { withAnimation(SidebarMetrics.foldAnimation) { foldsPinned.toggle() } }
+        )
+        .padding(.bottom, foldsPinned ? 0 : 3)
+        if !foldsPinned {
+            pinnedTiles
+        }
+    }
+
+    @ViewBuilder
+    private var pinnedTiles: some View {
         if !pinnedApps.isEmpty || !sidebar.pinnedSites.isEmpty {
             SidebarFavoritesGrid(items: pinnedItems)
         }

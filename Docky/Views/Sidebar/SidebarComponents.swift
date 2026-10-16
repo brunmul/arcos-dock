@@ -282,7 +282,26 @@ enum SidebarPinnedItem: Identifiable {
 struct SidebarPinnedItemTile: View {
     let item: SidebarPinnedItem
 
+    @ObservedObject private var hotKeys = SidebarHotKeyService.shared
+
     var body: some View {
+        tile
+            // While ⌃⌥ is held, the number of the shortcut that opens it.
+            .overlay(alignment: .bottomTrailing) {
+                if hotKeys.showsNumbers, let number = hotKeys.number(for: item) {
+                    Text("\(number)")
+                        .font(.system(size: 9, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .frame(minWidth: 13, minHeight: 13)
+                        .background(SidebarPalette.clay, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        .padding(2)
+                        .allowsHitTesting(false)
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var tile: some View {
         switch item {
         case .app(let app): SidebarAppTile(app: app)
         case .site(let site): SidebarSiteTile(site: site)
@@ -1150,9 +1169,11 @@ struct SidebarGroupHeader: View {
     let title: String
     let count: Int
     let isFolded: Bool
-    let closeTitle: String
+    /// The "close all" shown on hover; none when nil, as for the pinned
+    /// items, which have nothing to close.
+    var closeTitle: String? = nil
     let toggle: () -> Void
-    let close: () -> Void
+    var close: (() -> Void)? = nil
 
     @State private var isHovered = false
 
@@ -1178,7 +1199,7 @@ struct SidebarGroupHeader: View {
 
             Spacer(minLength: 0)
 
-            if isHovered, count > 0 {
+            if isHovered, count > 0, let closeTitle, let close {
                 Button(action: close) {
                     Text(closeTitle)
                         .font(.system(size: 10, weight: .medium))
