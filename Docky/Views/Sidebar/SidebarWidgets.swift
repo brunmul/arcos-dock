@@ -1103,11 +1103,19 @@ private struct SidebarAgendaDetail: View {
             }
             ForEach(Array(events.enumerated()), id: \.element.eventIdentifier) { index, event in
                 if index == 0 || !Calendar.current.isDate(event.startDate, inSameDayAs: events[index - 1].startDate) {
+                    // The sidebar's wave between two days, so each day
+                    // reads as its own block.
+                    if index > 0 {
+                        SidebarWave()
+                            .padding(.horizontal, 6)
+                            .padding(.top, 7)
+                            .padding(.bottom, 1)
+                    }
                     Text(dayTitle(event.startDate))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 6)
-                        .padding(.top, index == 0 ? 2 : 6)
+                        .padding(.top, 2)
                         .frame(height: 18, alignment: .bottom)
                 }
                 SidebarDetailRow(label: timeText(event), labelWidth: 40, action: { event.openInCalendar() }) {
