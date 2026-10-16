@@ -252,13 +252,9 @@ private struct SidebarCalendarWidget: View {
                     widget: widget,
                     isRail: isRail,
                     systemName: "calendar",
-                    title: "Enable Calendar",
+                    title: calendar.permissionStatus == .denied ? "Allow Calendar in Settings" : "Enable Calendar",
                     isDimmed: true,
-                    action: {
-                        Task {
-                            _ = await calendar.requestAccess()
-                        }
-                    },
+                    action: enableCalendar,
                     isInline: isInline
                 )
             } else if let event = nextEvent {
@@ -289,6 +285,23 @@ private struct SidebarCalendarWidget: View {
         }
         .task {
             calendar.ensureFreshEvent()
+        }
+    }
+
+    /// macOS asks only once: after a refusal the request returns false
+    /// without a prompt, so the row opens the Calendars pane instead.
+    private func enableCalendar() {
+        calendar.refreshAuthorizationStatus()
+        if calendar.permissionStatus == .denied {
+            PermissionsService.shared.openSystemSettings(for: .calendar)
+            return
+        }
+        Task {
+            if await !calendar.requestAccess() {
+                await MainActor.run {
+                    PermissionsService.shared.openSystemSettings(for: .calendar)
+                }
+            }
         }
     }
 
