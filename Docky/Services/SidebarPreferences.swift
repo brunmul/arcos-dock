@@ -70,6 +70,33 @@ final class SidebarPreferences: ObservableObject {
         didSet { defaults.set(showsBottomSwitcher, forKey: Keys.showsBottomSwitcher) }
     }
 
+    /// Widgets unticked in "…" → Widgets, by their identifier.
+    @Published var hiddenWidgetIDs: Set<String> {
+        didSet { defaults.set(Array(hiddenWidgetIDs), forKey: Keys.hiddenWidgetIDs) }
+    }
+
+    func shows(widget: WidgetTile) -> Bool {
+        !hiddenWidgetIDs.contains(widget.identifier)
+    }
+
+    func setShows(widget: WidgetTile, _ shows: Bool) {
+        if shows {
+            hiddenWidgetIDs.remove(widget.identifier)
+        } else {
+            hiddenWidgetIDs.insert(widget.identifier)
+        }
+    }
+
+    /// Every widget the bar can show: the dock's, but the bare date.
+    static func allWidgets(in store: TileStore) -> [WidgetTile] {
+        store.tiles.compactMap { tile in
+            if case .widget(let widget) = tile.content, widget.kind != .calendarDate {
+                return widget
+            }
+            return nil
+        }
+    }
+
     func shows(_ section: SidebarSection) -> Bool {
         !hiddenSections.contains(section)
     }
@@ -184,6 +211,7 @@ final class SidebarPreferences: ObservableObject {
         static let usesWebsiteIcons = "docky.fork.sidebar.usesWebsiteIcons"
         static let showsPinnedAppsInOpenList = "docky.fork.sidebar.showsPinnedAppsInOpenList"
         static let showsTrash = "docky.fork.sidebar.showsTrash"
+        static let hiddenWidgetIDs = "docky.fork.sidebar.hiddenWidgets"
         static let showsBottomSwitcher = "docky.fork.sidebar.showsBottomSwitcher"
         static let expandedApps = "docky.fork.sidebar.expandedApps"
         static let openFolder = "docky.fork.sidebar.openFolder"
@@ -203,6 +231,7 @@ final class SidebarPreferences: ObservableObject {
         usesWebsiteIcons = defaults.object(forKey: Keys.usesWebsiteIcons) as? Bool ?? true
         showsPinnedAppsInOpenList = defaults.object(forKey: Keys.showsPinnedAppsInOpenList) as? Bool ?? true
         showsTrash = defaults.object(forKey: Keys.showsTrash) as? Bool ?? true
+        hiddenWidgetIDs = Set(defaults.stringArray(forKey: Keys.hiddenWidgetIDs) ?? [])
         showsBottomSwitcher = defaults.object(forKey: Keys.showsBottomSwitcher) as? Bool ?? true
         expandedAppIdentifiers = Set(defaults.stringArray(forKey: Keys.expandedApps) ?? [])
         openFolderIdentifier = defaults.string(forKey: Keys.openFolder)

@@ -85,14 +85,7 @@ struct SidebarView: View {
             SidebarWelcome()
                 .padding(.horizontal, Self.horizontalPadding + 4)
                 .padding(.top, 8)
-                .padding(.bottom, calendarWidget == nil ? 12 : 2)
-
-            // The next event, right under the date and time it belongs with.
-            if let calendarWidget {
-                SidebarWidgetItem(widget: calendarWidget, isInline: true)
-                    .padding(.horizontal, Self.horizontalPadding)
-                    .padding(.bottom, 10)
-            }
+                .padding(.bottom, 12)
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -108,13 +101,13 @@ struct SidebarView: View {
             }
             .frame(minHeight: 80)
 
-            if !otherWidgets.isEmpty {
+            if !widgets.isEmpty {
                 SidebarDivider()
                     .padding(.horizontal, Self.horizontalPadding)
                     .padding(.bottom, 6)
 
                 VStack(spacing: 2) {
-                    ForEach(otherWidgets, id: \.identifier) { widget in
+                    ForEach(widgets, id: \.identifier) { widget in
                         SidebarWidgetItem(widget: widget)
                     }
                 }
@@ -319,24 +312,10 @@ struct SidebarView: View {
         return openApps.filter { !pinned.contains($0.bundleIdentifier) }
     }
 
+    /// The widgets shown, all together at the bottom (the events too):
+    /// the dock's widgets minus those unticked in "…" → Widgets.
     private var widgets: [WidgetTile] {
-        var result: [WidgetTile] = []
-        for tile in tileStore.tiles {
-            if case .widget(let widget) = tile.content, widget.kind != .calendarDate {
-                result.append(widget)
-            }
-        }
-        return result
-    }
-
-    /// The events widget, which the full sidebar shows under the greeting.
-    private var calendarWidget: WidgetTile? {
-        widgets.first { $0.kind == .calendar }
-    }
-
-    /// The widgets at the bottom of the full sidebar: all but the events.
-    private var otherWidgets: [WidgetTile] {
-        widgets.filter { $0.identifier != calendarWidget?.identifier }
+        SidebarPreferences.allWidgets(in: tileStore).filter { sidebar.shows(widget: $0) }
     }
 
     /// Docky's app folders and the Finder folders, in dock order.
@@ -568,6 +547,14 @@ private struct SidebarOptionsMenu: View {
                 .labelsHidden()
             }
             Toggle("Match Wallpaper to Theme", isOn: $sidebar.matchesWallpaper)
+            Menu("Widgets") {
+                ForEach(SidebarPreferences.allWidgets(in: TileStore.shared), id: \.identifier) { widget in
+                    Toggle(widget.title, isOn: Binding(
+                        get: { sidebar.shows(widget: widget) },
+                        set: { sidebar.setShows(widget: widget, $0) }
+                    ))
+                }
+            }
             Menu("Show in Compact & Bottom Bar") {
                 ForEach(SidebarSection.allCases, id: \.self) { section in
                     Toggle(section.title, isOn: Binding(
