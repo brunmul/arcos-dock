@@ -45,9 +45,8 @@ final class ChromeFaviconStore: ObservableObject {
 
     private init() {}
 
-    /// Chrome's icon for the page at `url`, or for another page on the same
-    /// host when it has none for this one. Nil until read; the view is
-    /// redrawn when it arrives.
+    /// Chrome's icon for the page at `url`. Nil until read, and when Chrome
+    /// has none for this very page; the view is redrawn when it arrives.
     func icon(for url: URL?) -> NSImage? {
         guard let url, let scheme = url.scheme, scheme.hasPrefix("http") else { return nil }
         let key = url.absoluteString
@@ -112,8 +111,7 @@ final class ChromeFaviconStore: ObservableObject {
         snapshotURLs = copies
     }
 
-    /// The largest bitmap Chrome keeps for the page, or failing that the
-    /// most recent one for a page on the same host.
+    /// The largest bitmap Chrome keeps for the page itself.
     private static func iconData(for url: URL, in database: URL) -> Data? {
         var handle: OpaquePointer?
         guard sqlite3_open_v2(database.path, &handle, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
@@ -128,7 +126,7 @@ final class ChromeFaviconStore: ObservableObject {
         // only taken when every page mapped to it is on the page's own
         // site, or when the icon file itself is served from that site: a
         // borrowed one falls through to the site's own icon.
-        guard let scheme = url.scheme, let host = url.host?.lowercased() else { return nil }
+        guard let host = url.host?.lowercased() else { return nil }
         let site = Self.siteDomain(of: host)
         let ownSiteOnly = """
         AND (
@@ -149,19 +147,11 @@ final class ChromeFaviconStore: ObservableObject {
         \(ownSiteOnly)
         ORDER BY b.width DESC LIMIT 1
         """
-        if let data = firstBlob(handle, exact, bindings: [url.absoluteString] + siteBindings) {
-            return data
-        }
-
-        let sameHost = """
-        SELECT b.image_data FROM icon_mapping m
-        JOIN favicon_bitmaps b ON b.icon_id = m.icon_id
-        JOIN favicons f ON f.id = m.icon_id
-        WHERE m.page_url LIKE ?1 AND length(b.image_data) > 0
-        \(ownSiteOnly)
-        ORDER BY b.last_updated DESC, b.width DESC LIMIT 1
-        """
-        return firstBlob(handle, sameHost, bindings: ["\(scheme)://\(host)/%"] + siteBindings)
+        // No icon for this very page means nothing from Chrome. Another
+        // page of the same host can wear another product's icon (Flights'
+        // airplane or Maps' pin on google.com), so the sidebar falls back
+        // to the site's own icon instead.
+        return firstBlob(handle, exact, bindings: [url.absoluteString] + siteBindings)
     }
 
     /// The host's last two labels ("mail.google.com" → "google.com"), close
