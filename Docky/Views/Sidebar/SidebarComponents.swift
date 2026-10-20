@@ -1049,7 +1049,8 @@ private struct SidebarWindowRow: View {
 ///      which knows pages behind a sign-in and icons set from script;
 ///   2. the icon of the page's site, fetched from the web
 ///      (`SidebarFaviconStore`);
-///   3. a globe.
+///   3. the first letter of the site's name on a quiet tile, the way a
+///      folder shows its symbol; a globe for a page with no site at all.
 struct SidebarWebIcon: View {
     let url: URL?
     let size: CGFloat
@@ -1069,9 +1070,44 @@ struct SidebarWebIcon: View {
         } else if let host = url.flatMap(SidebarPinnedSite.host(of:)), let favicon = favicons.icon(forSite: host) {
             SidebarPackIconView(icon: favicon, ink: Self.ink)
                 .frame(width: size, height: size)
+        } else if let letter = url.flatMap(Self.initial(of:)) {
+            SidebarLetterIcon(letter: letter, tint: Self.ink, size: size)
         } else {
             SidebarAppSymbolView(systemName: "globe", tint: Self.ink, size: size)
         }
+    }
+
+    /// The first letter of the site's own name, its subdomains and ending
+    /// left aside: "mail.google.com" -> "G", "lemonde.fr" -> "L". Nil for
+    /// an address with no name to take it from (an IP, a local page).
+    static func initial(of url: URL) -> String? {
+        guard let host = SidebarPinnedSite.host(of: url) else { return nil }
+        let labels = host.split(separator: ".")
+        guard labels.count >= 2, !labels.allSatisfy({ $0.allSatisfy(\.isNumber) }) else { return nil }
+        let name = labels[labels.count - 2]
+        guard let first = name.first(where: { $0.isLetter || $0.isNumber }) else { return nil }
+        return String(first).uppercased()
+    }
+}
+
+/// A site with no icon of its own: its initial on the same quiet tile as
+/// the symbols, so it reads as a placeholder and not as some other site.
+struct SidebarLetterIcon: View {
+    let letter: String
+    let tint: Color
+    let size: CGFloat
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Text(letter)
+            .font(.system(size: size * 0.58, weight: .semibold, design: .rounded))
+            .foregroundStyle(tint)
+            .frame(width: size, height: size)
+            .background(
+                RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                    .fill(tint.opacity(colorScheme == .dark ? 0.24 : 0.15))
+            )
     }
 }
 

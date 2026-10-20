@@ -97,6 +97,16 @@ final class BrowserTabsService: ObservableObject {
 
     private var timer: Timer?
     private var isReading = false
+    /// Bumped whenever the list is changed here ahead of the browser (a
+    /// tab closed or brought forward). A read started before that answers
+    /// with the old list and is thrown away.
+    private var localChangeCount = 0
+    /// Tabs closed from the sidebar, with when, kept out of the list until
+    /// a read no longer has them. The browser can still list a tab for a
+    /// moment after closing it; without this it would come back on screen
+    /// and need a second click.
+    private var closingTabs: [String: Date] = [:]
+    private static let closingGracePeriod: TimeInterval = 5
     /// The supported browser last brought to the front.
     private var lastActiveBrowser: SupportedBrowser?
 
@@ -158,13 +168,21 @@ final class BrowserTabsService: ObservableObject {
         isReading = true
 
         let browser = browser
+        let changeCount = localChangeCount
         Task { [weak self] in
             let result = try? await AppleScriptService.shared.descriptor(source: Self.listScript(for: browser))
-            let parsed = result.flatMap(Self.parse).map(Self.removingWebAppWindows)
+            let read = result.flatMap(Self.parse).map(Self.removingWebAppWindows)
             await MainActor.run {
                 guard let self else { return }
                 self.isReading = false
                 guard self.browser == browser else { return }
+                // Changed here while the browser was answering: its answer
+                // is already out of date. Ask again.
+                guard changeCount == self.localChangeCount else {
+                    self.refresh()
+                    return
+                }
+                let parsed = read.map(self.removingClosingTabs)
                 if self.tabs != parsed {
                     #if DEBUG
                     Self.logForDebugging("\(browser.bundleIdentifier): " + (parsed.map { "\($0.count) tabs, \($0.filter(\.isActive).count) active" } ?? "no answer"))
@@ -295,6 +313,7 @@ final class BrowserTabsService: ObservableObject {
     /// The tab is reached by its position, checked against its id; only
     /// when the tabs have moved since the last read are they searched.
     func focus(_ tab: BrowserTab) {
+        localChangeCount += 1
         // Shown as the current tab right away, without waiting for Chrome.
         tabs = tabs?.map { other in
             BrowserTab(
@@ -336,8 +355,23 @@ final class BrowserTabsService: ObservableObject {
         """)
     }
 
+    /// Leaves out the tabs being closed. A tab the read no longer lists is
+    /// closed for good and forgotten; one still listed after the grace
+    /// period did not close, and shows again.
+    private func removingClosingTabs(_ tabs: [BrowserTab]) -> [BrowserTab] {
+        guard !closingTabs.isEmpty else { return tabs }
+        let listed = Set(tabs.map(\.id))
+        let now = Date()
+        closingTabs = closingTabs.filter { id, date in
+            listed.contains(id) && now.timeIntervalSince(date) < Self.closingGracePeriod
+        }
+        return tabs.filter { closingTabs[$0.id] == nil }
+    }
+
     func close(_ tab: BrowserTab) {
         tabs?.removeAll { $0.id == tab.id }
+        closingTabs[tab.id] = Date()
+        localChangeCount += 1
         if browser == .dia {
             run("""
             tell application id "\(browser.bundleIdentifier)"
@@ -358,6 +392,11 @@ final class BrowserTabsService: ObservableObject {
         guard let tabs, !tabs.isEmpty else { return }
         let targets = tabs
         self.tabs = []
+        let now = Date()
+        for tab in targets {
+            closingTabs[tab.id] = now
+        }
+        localChangeCount += 1
         let lines = targets.map { tab in
             browser == .dia
                 ? Self.diaTabLoop(tab, command: "close aTab")
