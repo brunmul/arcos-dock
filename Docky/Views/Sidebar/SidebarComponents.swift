@@ -500,13 +500,30 @@ struct SidebarPlaceView: View {
     let allItemIDs: [String]
 
     @ObservedObject private var drag = SidebarPinDrag.shared
+    @ObservedObject private var workspace = WorkspaceService.shared
+    @ObservedObject private var browserTabs = BrowserTabsService.shared
+
+    /// The open ones show; the others wait behind the overflow item.
+    private var openItems: [SidebarPinnedItem] { items.filter(isOpen) }
+    private var closedItems: [SidebarPinnedItem] { items.filter { !isOpen($0) } }
+
+    private func isOpen(_ item: SidebarPinnedItem) -> Bool {
+        switch item {
+        case .app(let app): workspace.isRunning(bundleIdentifier: app.bundleIdentifier)
+        case .site(let site): browserTabs.tab(for: site) != nil
+        }
+    }
 
     var body: some View {
+        let closed = closedItems
         switch layout {
         case .grid:
             LazyVGrid(columns: SidebarMetrics.tileColumns, spacing: SidebarMetrics.tileSpacing) {
-                ForEach(items) { item in
+                ForEach(openItems) { item in
                     draggable(SidebarPinnedItemTile(item: item), item: item)
+                }
+                if !closed.isEmpty {
+                    SidebarPinnedOverflow(items: closed, isRow: false, allItemIDs: allItemIDs)
                 }
                 ForEach(widgets, id: \.identifier) { widget in
                     SidebarWidgetItem(widget: widget, isRail: true)
@@ -514,8 +531,11 @@ struct SidebarPlaceView: View {
             }
         case .list:
             VStack(spacing: 2) {
-                ForEach(items) { item in
+                ForEach(openItems) { item in
                     draggable(SidebarPinnedItemRow(item: item), item: item)
+                }
+                if !closed.isEmpty {
+                    SidebarPinnedOverflow(items: closed, isRow: true, allItemIDs: allItemIDs)
                 }
                 ForEach(widgets, id: \.identifier) { widget in
                     SidebarWidgetItem(widget: widget)
@@ -538,6 +558,86 @@ struct SidebarPlaceView: View {
                 allItemIDs: allItemIDs,
                 drag: drag
             ))
+    }
+}
+
+/// The pinned items that are not open, behind one tile ("+3") or one row
+/// ("3 More") at the end of their place. A click opens a panel beside the
+/// sidebar with them as tiles, to launch one; they can be dragged from
+/// there back among the others.
+struct SidebarPinnedOverflow: View {
+    let items: [SidebarPinnedItem]
+    let isRow: Bool
+    let allItemIDs: [String]
+
+    @State private var isHovered = false
+    @State private var isShowingPanel = false
+
+    private static let panelColumns = Array(
+        repeating: GridItem(.fixed(44), spacing: SidebarMetrics.tileSpacing),
+        count: 5
+    )
+
+    var body: some View {
+        Button {
+            isShowingPanel.toggle()
+        } label: {
+            label
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("Pinned, not open")
+        .popover(isPresented: $isShowingPanel, arrowEdge: .trailing) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Pinned")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                LazyVGrid(columns: Self.panelColumns, spacing: SidebarMetrics.tileSpacing) {
+                    ForEach(items) { item in
+                        SidebarPinnedItemTile(item: item)
+                            .onDrag {
+                                SidebarPinDrag.shared.begin(item.id)
+                                return NSItemProvider(object: item.id as NSString)
+                            }
+                    }
+                }
+            }
+            .padding(12)
+            .frame(width: CGFloat(min(items.count, 5)) * (44 + SidebarMetrics.tileSpacing) + 24 - SidebarMetrics.tileSpacing)
+            .sidebarThemeScheme(SidebarPreferences.shared.theme)
+        }
+    }
+
+    @ViewBuilder
+    private var label: some View {
+        if isRow {
+            HStack(spacing: SidebarMetrics.rowSpacing) {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: SidebarMetrics.rowIconSize, height: SidebarMetrics.rowIconSize)
+                Text("\(items.count) More")
+                    .font(.system(size: SidebarMetrics.rowFontSize))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, SidebarMetrics.rowPadding)
+            .frame(height: SidebarMetrics.rowHeight)
+            .background(SidebarItemBackground(isHovered: isHovered || isShowingPanel, isCurrent: false))
+        } else {
+            Text("+\(items.count)")
+                .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .frame(height: SidebarMetrics.tileHeight)
+                .background(SidebarItemBackground(
+                    isHovered: isHovered || isShowingPanel,
+                    isCurrent: false,
+                    restingOpacity: 0.07,
+                    cornerRadius: SidebarMetrics.tileCornerRadius
+                ))
+        }
     }
 }
 
