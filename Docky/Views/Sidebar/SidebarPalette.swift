@@ -1,9 +1,8 @@
 //
-//  SidebarWelcome.swift
+//  SidebarPalette.swift
 //  Docky
 //
-//  What makes the sidebar feel like the front of an operating system and
-//  not a list of apps: a greeting at the top.
+//  The sidebar's palette and its wavy separator.
 //  The look borrows from Claude's own interface, on Docky's layout: a warm
 //  paper surface, a clay accent, a serif for the one line that speaks to
 //  the person, and a hand-drawn wave where a rule would be.
@@ -61,57 +60,5 @@ private struct SidebarWaveShape: Shape {
             x += 1
         }
         return path
-    }
-}
-
-// MARK: - Welcome
-
-/// The greeting, following the time of day and the system's language
-/// (French or English). Refreshed every minute.
-struct SidebarWelcome: View {
-    /// Inline, beside the header's buttons, it keeps its full size and
-    /// asks for its whole width; on a line of its own, it may shrink a
-    /// little to stay on one line.
-    var isInline = false
-
-    var body: some View {
-        TimelineView(.everyMinute) { context in
-            Text(SidebarGreeting.text(at: context.date))
-                .font(.system(size: 19, weight: .regular, design: .serif))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(isInline ? 1 : 0.75)
-                .fixedSize(horizontal: isInline, vertical: false)
-        }
-    }
-}
-
-enum SidebarGreeting {
-    private static var isFrench: Bool {
-        Locale.preferredLanguages.first?.hasPrefix("fr") == true
-    }
-
-    /// The account's first name, or nothing when it cannot be read.
-    private static var firstName: String {
-        NSFullUserName()
-            .split(separator: " ")
-            .first
-            .map(String.init) ?? ""
-    }
-
-    static func text(at date: Date) -> String {
-        let hour = Calendar.current.component(.hour, from: date)
-        let greeting: String
-        switch hour {
-        case 5..<12:
-            greeting = isFrench ? "Bonjour" : "Good morning"
-        case 12..<18:
-            greeting = isFrench ? "Bon après-midi" : "Good afternoon"
-        default:
-            greeting = isFrench ? "Bonsoir" : "Good evening"
-        }
-
-        let name = firstName
-        return name.isEmpty ? greeting : "\(greeting), \(name)"
     }
 }

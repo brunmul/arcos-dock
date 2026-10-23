@@ -5,10 +5,9 @@
 //  Content of the sidebar. It follows the layout of Arc's sidebar, top to
 //  bottom:
 //
-//    header      the greeting (`SidebarWelcome.swift`), then the full /
-//                compact toggle and a menu (auto-hide, settings, back to
-//                the dock strip); the greeting moves to a line of its own
-//                under them when the sidebar is too narrow for both
+//    header      Docky's icon, which opens Settings, then the full /
+//                compact toggle and a menu (settings, back to the dock
+//                strip, quit)
 //    pinned      a group that folds: the pinned apps and sites, and any
 //                widget moved up, as tiles or rows ("…" → Layout); then
 //                the pinned folders and the Trash. A folder's tile lists
@@ -82,10 +81,9 @@ struct SidebarView: View {
     private var fullSidebar: some View {
         VStack(spacing: 0) {
             SidebarHeader()
-                .padding(.leading, Self.horizontalPadding + 4)
-                .padding(.trailing, Self.horizontalPadding)
+                .padding(.horizontal, Self.horizontalPadding)
                 .padding(.top, 8)
-                .padding(.bottom, 12)
+                .padding(.bottom, 10)
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -517,39 +515,48 @@ private struct SidebarConcaveCorner: Shape {
 
 // MARK: - Header
 
-/// The greeting on the left of the buttons when the width allows it,
-/// otherwise the buttons alone on the first line and the greeting under
-/// them.
+/// Docky's own icon on the left, which opens Settings, and the buttons
+/// on the right.
 private struct SidebarHeader: View {
     @ObservedObject private var sidebar = SidebarPreferences.shared
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 2) {
-                SidebarWelcome(isInline: true)
-                Spacer(minLength: 8)
-                buttons
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 2) {
-                    Spacer(minLength: 0)
-                    buttons
-                }
-                SidebarWelcome()
-            }
-        }
-    }
-
-    private var buttons: some View {
         HStack(spacing: 2) {
+            SidebarAppMark()
+            Spacer(minLength: 8)
             SidebarIconButton(systemName: "sidebar.left", help: "Show icons only") {
                 sidebar.isCompact = true
             }
-
             SidebarOptionsMenu()
         }
         .frame(height: 24)
+    }
+}
+
+/// Docky's app icon, where the Apple mark used to be: a click opens
+/// Settings on the sidebar's panes.
+struct SidebarAppMark: View {
+    @State private var isHovered = false
+
+    var body: some View {
+        Button {
+            SettingsNavigator.shared.requestPane(id: "sidebarLayout")
+        } label: {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 20, height: 20)
+                .frame(width: 28, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.primary.opacity(isHovered ? 0.08 : 0))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("Settings")
+        .accessibilityLabel("Settings")
     }
 }
 
