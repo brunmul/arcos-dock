@@ -23,7 +23,7 @@ struct BehaviorSettingsView: View {
     @State private var isShowingResetConfirmation = false
 
     var body: some View {
-        Form {
+        SettingsPage {
             switch subsection {
             case .general:
                 generalSection
@@ -43,7 +43,6 @@ struct BehaviorSettingsView: View {
                 appFoldersSection
             }
         }
-        .formStyle(.grouped)
         .confirmationDialog(
             "Reset behavior settings?",
             isPresented: $isShowingResetConfirmation
@@ -59,527 +58,371 @@ struct BehaviorSettingsView: View {
 
     @ViewBuilder
     private var generalSection: some View {
-        Section("Behavior") {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Reset Behavior Settings")
-                    .font(.headline)
-
-                HStack {
-                    Button("Reset to Defaults", role: .destructive) {
-                        isShowingResetConfirmation = true
-                    }
-                    Spacer()
+        SettingsGroup(title: "Reset", note: "Every behavior setting back to its built-in default.") {
+            SettingsCard {
+                ButtonRow(
+                    symbol: "arrow.counterclockwise",
+                    title: "Reset Behavior Settings",
+                    note: "Placement, visibility, app-tile click, app folders, widgets, launch and system Dock. Useful when a theme has nudged behavior somewhere you want to undo.",
+                    buttonTitle: "Reset to Defaults"
+                ) {
+                    isShowingResetConfirmation = true
                 }
-
-                Text("Reverts every behavior setting (placement, visibility, app-tile click, app folders, widgets, launch, system-dock) to its built-in default. Use this when a theme has nudged behavior in a direction you want to undo.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, 4)
         }
     }
 
     @ViewBuilder
     private var placementSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Window Position")
-                        .font(.headline)
-
-                    Spacer()
-
-                    Picker("Window Position", selection: $preferences.windowPosition) {
-                        ForEach(DockWindowPosition.allCases) { position in
-                            Text(position.title).tag(position)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
+        SettingsGroup(title: "Position", note: "Where the dock strip sits, or the same edge as the macOS Dock.") {
+            HStack(spacing: 12) {
+                ForEach(DockWindowPosition.allCases) { position in
+                    ChoiceCard(title: position.title, isSelected: preferences.windowPosition == position) {
+                        DockStripSketch(position: position)
+                    } action: { preferences.windowPosition = position }
                 }
-
-                Text("Choose where Docky sits on screen, or mirror the macOS Dock position.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, 4)
+        }
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Display")
-                        .font(.headline)
-
-                    Spacer()
-
-                    Picker("Display", selection: $preferences.windowDisplayTarget) {
-                        ForEach(DockWindowDisplayTarget.allCases) { target in
-                            Text(target.title).tag(target)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
+        SettingsGroup(title: "Screens") {
+            SettingsCard {
+                PickerRow(
+                    symbol: "display.2",
+                    title: "Display",
+                    note: "Stay on the primary display, or follow the display the pointer is on.",
+                    selection: $preferences.windowDisplayTarget,
+                    isSegmented: true
+                ) {
+                    ForEach(DockWindowDisplayTarget.allCases) { Text($0.title).tag($0) }
                 }
-
-                Text("Docky uses a single main window. Choose whether it stays on the primary display or follows the display containing the pointer.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Spaces")
-                        .font(.headline)
-
-                    Spacer()
-
-                    Picker("Spaces", selection: $preferences.windowSpaceBehavior) {
-                        ForEach(DockWindowSpaceBehavior.allCases) { behavior in
-                            Text(behavior.title).tag(behavior)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
+                SettingsDivider()
+                PickerRow(
+                    symbol: "square.on.square",
+                    title: "Spaces",
+                    note: "Only the active Space, or every Space including full-screen ones.",
+                    selection: $preferences.windowSpaceBehavior,
+                    isSegmented: true
+                ) {
+                    ForEach(DockWindowSpaceBehavior.allCases) { Text($0.title).tag($0) }
                 }
-
-                Text("Choose whether Docky appears only in the active Space or joins every Space, including fullscreen auxiliary presentation.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, 4)
         }
     }
 
     @ViewBuilder
     private var visibilitySection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Autohide Window", isOn: $preferences.autohidesWindow)
-                    .font(.headline)
-
-                Text("Slides Docky's window off-screen until the pointer reaches its edge. Hide timing is controlled by Docky's own delay below, so hiding the system Dock does not stretch it.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        SettingsGroup(title: "Hiding", note: "When the dock steps out of the way.") {
+            SettingsCard {
+                ToggleRow(
+                    symbol: "eye.slash",
+                    title: "Autohide Window",
+                    note: "Slides off-screen until the pointer reaches its edge.",
+                    isOn: $preferences.autohidesWindow
+                )
+                SettingsDivider()
+                SliderRow(
+                    symbol: "timer",
+                    title: "Autohide Delay",
+                    note: "How long it waits after the pointer leaves before hiding.",
+                    value: $preferences.autohideWindowDelay,
+                    range: 0...5
+                )
+                .disabled(!preferences.autohidesWindow)
+                SettingsDivider()
+                SliderRow(
+                    symbol: "wind",
+                    title: "Animation Duration",
+                    note: "How long the slide takes. 0 snaps instantly.",
+                    value: $preferences.autohideAnimationDuration,
+                    range: 0...1
+                )
+                .disabled(!preferences.autohidesWindow)
+                SettingsDivider()
+                ToggleRow(
+                    symbol: "arrow.up.left.and.arrow.down.right",
+                    title: "Hide in Fullscreen",
+                    note: "Autohides while a full-screen app is on its display; off, it stays over them.",
+                    isOn: $preferences.hidesDuringFullscreen
+                )
+                SettingsDivider()
+                SliderRow(
+                    symbol: "hourglass",
+                    title: "Fullscreen Reveal Delay",
+                    note: "How long the pointer must rest on the edge to bring it back over a full-screen app.",
+                    value: $preferences.fullscreenRevealDelay,
+                    range: 0...2
+                )
+                .disabled(!preferences.hidesDuringFullscreen)
             }
-            .padding(.vertical, 4)
+        }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Autohide Delay")
-                    .font(.headline)
-
-                HStack {
-                    Slider(value: $preferences.autohideWindowDelay, in: 0...5, step: 0.05) {
-                        Text("Autohide Delay")
-                    }
-                    .labelsHidden()
-
-                    Text("\(String(format: "%.2f", preferences.autohideWindowDelay)) s")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 56, alignment: .trailing)
+        SettingsGroup(title: "Size and Windows") {
+            SettingsCard {
+                PickerRow(
+                    symbol: "macwindow",
+                    title: "Maximized Windows",
+                    note: preferences.maximizedWindowBehavior.detail,
+                    selection: $preferences.maximizedWindowBehavior
+                ) {
+                    ForEach(MaximizedWindowBehavior.allCases) { Text($0.title).tag($0) }
                 }
-
-                Text("Controls how long Docky waits after the pointer leaves and interactions end before the window hides.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
-            .disabled(!preferences.autohidesWindow)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Animation Duration")
-                    .font(.headline)
-
-                HStack {
-                    Slider(value: $preferences.autohideAnimationDuration, in: 0...1, step: 0.05) {
-                        Text("Animation Duration")
-                    }
-                    .labelsHidden()
-
-                    Text("\(String(format: "%.2f", preferences.autohideAnimationDuration)) s")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 56, alignment: .trailing)
+                SettingsDivider()
+                PickerRow(
+                    symbol: "arrow.left.and.right.square",
+                    title: "Overflow",
+                    note: "Shrink to fit the screen, or keep the size and scroll.",
+                    selection: $preferences.overflowBehavior,
+                    isSegmented: true
+                ) {
+                    ForEach(DockOverflowBehavior.allCases) { Text($0.title).tag($0) }
                 }
-
-                Text("How long the slide takes when Docky shows or hides its window. Set to 0 to snap instantly.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
-            .disabled(!preferences.autohidesWindow)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Hide in Fullscreen", isOn: $preferences.hidesDuringFullscreen)
-                    .font(.headline)
-
-                Text("When turned off, Docky stays pinned over fullscreen apps. When on, Docky autohides while a fullscreen app is on its display and reveals on edge dwell.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Fullscreen Reveal Delay")
-                    .font(.headline)
-
-                HStack {
-                    Slider(value: $preferences.fullscreenRevealDelay, in: 0...2, step: 0.05) {
-                        Text("Fullscreen Reveal Delay")
-                    }
-                    .labelsHidden()
-
-                    Text("\(String(format: "%.2f", preferences.fullscreenRevealDelay)) s")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 56, alignment: .trailing)
+                SettingsDivider()
+                PickerRow(
+                    symbol: "arrow.left.and.line.vertical.and.arrow.right",
+                    title: "Window Axis Size",
+                    note: "Hug the tiles, or stretch across the whole edge.",
+                    selection: $preferences.windowAxisSizing,
+                    isSegmented: true
+                ) {
+                    ForEach(DockWindowAxisSizing.allCases) { Text($0.title).tag($0) }
                 }
-
-                Text("How long the pointer must dwell at the screen edge before Docky reveals while a fullscreen app is active. Mirrors the macOS Dock's intent gating.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, 4)
-            .disabled(!preferences.hidesDuringFullscreen)
+        }
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Maximized Windows")
-                        .font(.headline)
+        SettingsGroup(title: "Apps Shown") {
+            SettingsCard {
+                ToggleRow(
+                    symbol: "app.badge.checkmark",
+                    title: "Show Running Apps",
+                    note: "Off, unpinned running apps are hidden and the dock is a static shelf.",
+                    isOn: $preferences.showsRunningApps
+                )
+                SettingsDivider()
+                ToggleRow(
+                    symbol: "line.diagonal",
+                    title: "Show Active/Pinned Separator",
+                    note: "Off, running apps join the pinned ones as a single strip.",
+                    isOn: $preferences.showsActivePinnedSeparator
+                )
+                .disabled(!preferences.showsRunningApps)
+                SettingsDivider()
+                ToggleRow(
+                    symbol: "clock.arrow.circlepath",
+                    title: "Disable Recent Apps",
+                    note: "Keeps the layout stable as apps launch, even with running apps shown.",
+                    isOn: $preferences.hidesRecentApps
+                )
+                SettingsDivider()
+                ToggleRow(
+                    symbol: "circle.lefthalf.filled",
+                    title: "Dim Idle App Icons",
+                    note: "Half opacity while an app is hidden or has no window. Needs Accessibility.",
+                    isOn: $preferences.dimsIdleAppIcons
+                )
+            }
+        }
 
-                    Spacer()
-
-                    Picker("Maximized Windows", selection: $preferences.maximizedWindowBehavior) {
-                        ForEach(MaximizedWindowBehavior.allCases) { behavior in
-                            Text(behavior.title).tag(behavior)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
+        SettingsGroup(title: "Badges") {
+            SettingsCard {
+                ToggleRow(
+                    symbol: "app.badge",
+                    title: "Show Notification Badges",
+                    note: "The red count, like Mail's unread total, read from the system Dock. Needs Accessibility.",
+                    isOn: $preferences.showsAppBadges
+                )
+                SettingsDivider()
+                PickerRow(
+                    symbol: "folder.badge.plus",
+                    title: "Folder Badges",
+                    note: "One total on the folder, or a badge on each app in it.",
+                    selection: $preferences.folderBadgeMode,
+                    isSegmented: true
+                ) {
+                    ForEach(FolderBadgeMode.allCases) { Text($0.title).tag($0) }
                 }
-
-                Text(preferences.maximizedWindowBehavior.detail)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Overflow Behavior")
-                        .font(.headline)
-
-                    Spacer()
-
-                    Picker("Overflow Behavior", selection: $preferences.overflowBehavior) {
-                        ForEach(DockOverflowBehavior.allCases) { behavior in
-                            Text(behavior.title).tag(behavior)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
+                .disabled(!preferences.showsAppBadges)
+                SettingsDivider()
+                PickerRow(
+                    symbol: "smallcircle.filled.circle",
+                    title: "Per-App Badge Style",
+                    note: "A dot or the full count on the folder's preview. The open folder always shows the count.",
+                    selection: $preferences.folderBadgePreviewStyle,
+                    isSegmented: true
+                ) {
+                    ForEach(FolderBadgePreviewStyle.allCases) { Text($0.title).tag($0) }
                 }
-
-                Text("Choose whether Docky shrinks to fit the screen or keeps its size and scrolls when it runs out of room on the current dock axis.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                .disabled(!preferences.showsAppBadges || preferences.folderBadgeMode != .perApp)
             }
-            .padding(.vertical, 4)
+        }
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Window Axis Size")
-                        .font(.headline)
-
-                    Spacer()
-
-                    Picker("Window Axis Size", selection: $preferences.windowAxisSizing) {
-                        ForEach(DockWindowAxisSizing.allCases) { sizing in
-                            Text(sizing.title).tag(sizing)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                }
-
-                Text("Choose whether Docky hugs its tiles or stretches across the full screen width or height of the current dock axis.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        SettingsGroup(title: "Shelve Mode", note: "The dock as a shelf of pinned apps and widgets.") {
+            SettingsCard {
+                ToggleRow(
+                    symbol: "books.vertical",
+                    title: "Shelve Mode",
+                    note: "Hides the fixtures picked below.",
+                    isOn: $preferences.enablesShelveMode
+                )
+                SettingsDivider()
+                ToggleRow(
+                    symbol: "face.smiling",
+                    title: "Hide Finder",
+                    note: "No Finder tile while shelve mode is on.",
+                    isOn: $preferences.shelveHidesFinder
+                )
+                .disabled(!preferences.enablesShelveMode)
+                SettingsDivider()
+                ToggleRow(
+                    symbol: "trash",
+                    title: "Hide Trash",
+                    note: "No Trash tile while shelve mode is on.",
+                    isOn: $preferences.shelveHidesTrash
+                )
+                .disabled(!preferences.enablesShelveMode)
             }
-            .padding(.vertical, 4)
+        }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Show Active/Pinned Separator", isOn: $preferences.showsActivePinnedSeparator)
-                    .font(.headline)
-
-                Text("When turned off, unpinned running apps are merged into the pinned section so the dock behaves like a single app strip.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        SettingsGroup(title: "Minimized Windows") {
+            SettingsCard {
+                ToggleRow(
+                    symbol: "dock.arrow.down.rectangle",
+                    title: "Show Minimized Windows",
+                    note: "Minimized windows as tiles at the end of the dock.",
+                    isOn: $preferences.showsMinimizedWindows
+                )
+                SettingsDivider()
+                ToggleRow(
+                    symbol: "rectangle.stack",
+                    title: "List in Switcher & Previews",
+                    note: "Minimized windows in the window switcher and hover previews, dimmed and labeled.",
+                    isOn: $preferences.includesMinimizedWindows
+                )
             }
-            .padding(.vertical, 4)
-            .disabled(!preferences.showsRunningApps)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Show Running Apps", isOn: $preferences.showsRunningApps)
-                    .font(.headline)
-
-                Text("When turned off, unpinned running apps are hidden from Docky so it acts as a static shelf alongside the system Dock.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Dim Idle App Icons", isOn: $preferences.dimsIdleAppIcons)
-                    .font(.headline)
-
-                Text("Fades an app's tile to half opacity while the app is hidden or has no windows open. Turn off to keep icons fully opaque regardless of state. Detecting open windows needs Accessibility permission.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Show Notification Badges", isOn: $preferences.showsAppBadges)
-                    .font(.headline)
-
-                Text("Paints the red notification count (like Mail's unread total) on running app tiles. Read from the system Dock, so it needs Accessibility permission.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Folder Badges")
-                        .font(.headline)
-
-                    Spacer()
-
-                    Picker("Folder Badges", selection: $preferences.folderBadgeMode) {
-                        ForEach(FolderBadgeMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                }
-
-                Text("How an app folder shows its apps' badges: one combined total on the folder tile, or a badge on each app inside it.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
-            .disabled(!preferences.showsAppBadges)
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Per-App Badge Style")
-                        .font(.headline)
-
-                    Spacer()
-
-                    Picker("Per-App Badge Style", selection: $preferences.folderBadgePreviewStyle) {
-                        ForEach(FolderBadgePreviewStyle.allCases) { style in
-                            Text(style.title).tag(style)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                }
-
-                Text("On the folder tile preview, show a plain dot or the full count on each badged app. The opened folder always shows the count.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
-            .disabled(!preferences.showsAppBadges || preferences.folderBadgeMode != .perApp)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Disable Recent Apps", isOn: $preferences.hidesRecentApps)
-                    .font(.headline)
-
-                Text("Hides recent / unpinned running apps even when \"Show Running Apps\" is on. Useful when you want a stable dock layout that doesn't shift as apps launch.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Shelve Mode", isOn: $preferences.enablesShelveMode)
-                    .font(.headline)
-
-                Toggle("Hide Finder", isOn: $preferences.shelveHidesFinder)
-                    .disabled(!preferences.enablesShelveMode)
-                Toggle("Hide Trash", isOn: $preferences.shelveHidesTrash)
-                    .disabled(!preferences.enablesShelveMode)
-
-                Text("Treats the dock as a shelf of pinned apps and widgets. Use the toggles to pick which fixtures, Finder, Trash, or both, disappear while shelve mode is on.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Show Minimized Windows", isOn: $preferences.showsMinimizedWindows)
-                    .font(.headline)
-
-                Text("When turned off, minimized window tiles do not appear in Docky's trailing section.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("List Minimized Windows in Switcher & Previews", isOn: $preferences.includesMinimizedWindows)
-                    .font(.headline)
-
-                Text("Include minimized windows in the window switcher and per-tile hover previews. They render dimmed with a \"(minimized)\" label so they stand out from active windows.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
         }
     }
 
     @ViewBuilder
     private var appTileClickSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("When App Is Already Active")
-                        .font(.headline)
-
-                    Spacer()
-
-                    Picker("When App Is Already Active", selection: frontmostClickBehaviorBinding) {
-                        ForEach(AppTileFrontmostClickBehavior.allCases) { behavior in
-                            Text(frontmostClickBehaviorTitle(behavior)).tag(behavior)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
+        SettingsGroup(
+            title: "When the App Is Already in Front",
+            note: "Clicking an app that is not in front always opens, focuses or restores it."
+        ) {
+            SettingsCard {
+                PickerRow(
+                    symbol: "cursorarrow.click",
+                    title: "Click Action",
+                    note: "What a click on the tile of the app in front does.",
+                    selection: frontmostClickBehaviorBinding
+                ) {
+                    ForEach(AppTileFrontmostClickBehavior.allCases) { Text(frontmostClickBehaviorTitle($0)).tag($0) }
                 }
-
-                Text("Choose what happens when you click the tile of an app that already has the focus. Clicking idle apps always launches, focuses, or restores their last minimized window.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, 4)
         }
     }
 
     @ViewBuilder
     private var widgetsSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Show Expanded Preview on Hover", isOn: $preferences.enablesWidgetHoverPreview)
-                    .font(.headline)
-
-                Text("When enabled, hovering an expandable widget tile shows a larger preview in a separate window. Turn this off to keep widgets at their pinned size.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        SettingsGroup(title: "Hover Preview", note: "A larger view of a widget while the pointer rests on it.") {
+            SettingsCard {
+                ToggleRow(
+                    symbol: "arrow.up.left.and.arrow.down.right",
+                    title: "Show Expanded Preview on Hover",
+                    note: "Off, widgets stay at their pinned size.",
+                    isOn: $preferences.enablesWidgetHoverPreview
+                )
+                SettingsDivider()
+                SliderRow(
+                    symbol: "timer",
+                    title: "Hover Preview Delay",
+                    note: "How long the pointer rests before the preview opens.",
+                    value: $preferences.widgetHoverPreviewDelay,
+                    range: 0...2,
+                    format: { $0 == 0 ? "Off" : String(format: "%.2f s", $0) }
+                )
+                .disabled(!preferences.enablesWidgetHoverPreview)
             }
-            .padding(.vertical, 4)
+        }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Apply To Sizes")
-                    .font(.headline)
-
+        SettingsGroup(title: "Apply to Sizes", note: "Which widget sizes open the preview.") {
+            HStack(spacing: 10) {
                 // `.four` is theme-only; skip it in the user-facing
                 // hover-preview span toggles.
                 ForEach(TileSpan.allCases.filter { $0 != .four }) { span in
-                    Toggle(spanTitle(for: span), isOn: spanBinding(for: span))
+                    CheckTile(symbol: spanSymbol(for: span), title: spanTitle(for: span), isOn: spanBinding(for: span))
                 }
-
-                Text("Choose which tile sizes trigger the expanded preview. Widgets pinned at other sizes stay at their pinned size on hover.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, 4)
-            .disabled(!preferences.enablesWidgetHoverPreview)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Hover Preview Delay")
-                    .font(.headline)
-
-                HStack {
-                    Slider(value: $preferences.widgetHoverPreviewDelay, in: 0...2, step: 0.05) {
-                        Text("Hover Preview Delay")
-                    }
-                    .labelsHidden()
-
-                    Text(preferences.widgetHoverPreviewDelay == 0
-                        ? "Off"
-                        : "\(String(format: "%.2f", preferences.widgetHoverPreviewDelay)) s")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 56, alignment: .trailing)
-                }
-
-                Text("Time the cursor must rest on a widget before its expanded preview window appears. Set to zero for an immediate preview.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
             .disabled(!preferences.enablesWidgetHoverPreview)
         }
     }
 
     @ViewBuilder
     private var launchSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Open at Login", isOn: $preferences.opensAtLogin)
-                    .font(.headline)
-
-                Text("Registers Docky as a login item so it starts automatically after you sign in.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        SettingsGroup(title: "Launch") {
+            SettingsCard {
+                ToggleRow(
+                    symbol: "power",
+                    title: "Open at Login",
+                    note: "Docky starts by itself after you sign in.",
+                    isOn: $preferences.opensAtLogin
+                )
             }
-            .padding(.vertical, 4)
         }
     }
 
     @ViewBuilder
     private var systemDockSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Hide System Dock", isOn: $preferences.hidesSystemDock)
-                    .font(.headline)
-
-                Text("Forces the macOS Dock to autohide with a long delay, disables bouncing and launch animations, and keeps the system Dock aligned with Docky's explicit edge selection while this stays on. Docky snapshots your current Dock settings first and restores them when you turn this off or quit Docky. This no longer affects Docky's own autohide delay.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Button("Restore System Dock") {
+        SettingsGroup(
+            title: "System Dock",
+            note: "Docky saves your Dock settings first and puts them back when this is off or Docky quits."
+        ) {
+            SettingsCard {
+                ToggleRow(
+                    symbol: "dock.rectangle",
+                    title: "Hide System Dock",
+                    note: "The macOS Dock autohides with a long delay, without bouncing or launch animations, on Docky's edge.",
+                    isOn: $preferences.hidesSystemDock
+                )
+                SettingsDivider()
+                ButtonRow(
+                    symbol: "arrow.uturn.backward",
+                    title: "Restore System Dock",
+                    note: "Brings the macOS Dock back as it was.",
+                    buttonTitle: "Restore"
+                ) {
                     preferences.hidesSystemDock = false
                 }
                 .disabled(!preferences.hidesSystemDock)
             }
-            .padding(.vertical, 4)
         }
     }
 
     @ViewBuilder
     private var appFoldersSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Shows Grouped Opened Apps In Dock", isOn: $preferences.showsGroupedOpenedAppsInDock)
-                    .font(.headline)
-
-                Text("Shows running apps from an app folder immediately to the right of that folder, and lets the folder reflect how many grouped apps are open.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        SettingsGroup(title: "App Folders") {
+            SettingsCard {
+                ToggleRow(
+                    symbol: "folder",
+                    title: "Group Opened Apps Beside Their Folder",
+                    note: "A folder's running apps sit right after it, and the folder shows how many are open.",
+                    isOn: $preferences.showsGroupedOpenedAppsInDock
+                )
+                SettingsDivider()
+                ToggleRow(
+                    symbol: "rectangle.roundedtop",
+                    title: "Grouping Backdrop",
+                    note: "A rounded backdrop around the folder and its opened apps.",
+                    isOn: $preferences.showsGroupedOpenedAppsBackdrop
+                )
+                .disabled(!preferences.showsGroupedOpenedAppsInDock)
             }
-            .padding(.vertical, 4)
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle("Shows Grouping Backdrop", isOn: $preferences.showsGroupedOpenedAppsBackdrop)
-                    .font(.headline)
-                    .disabled(!preferences.showsGroupedOpenedAppsInDock)
-
-                Text("Draws a rounded backdrop around the folder tile and its grouped opened apps. Turn off to keep the grouping without the visual halo.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 4)
+    private func spanSymbol(for span: TileSpan) -> String {
+        switch span {
+        case .one: "square"
+        case .two: "rectangle"
+        case .three, .four: "rectangle.portrait"
         }
     }
 

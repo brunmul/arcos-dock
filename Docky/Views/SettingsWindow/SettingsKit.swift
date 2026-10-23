@@ -305,3 +305,50 @@ struct SettingsSymbol: View {
     }
 }
 
+
+/// The dock strip on a small screen, for the position choices: along the
+/// edge it sits on, or the macOS Dock's edge for System.
+struct DockStripSketch: View {
+    let position: DockWindowPosition
+
+    var body: some View {
+        GeometryReader { geometry in
+            let size = geometry.size
+            ZStack {
+                Color.primary.opacity(0.06)
+                switch position {
+                case .left:
+                    strip(vertical: true).position(x: 9, y: size.height / 2)
+                case .right:
+                    strip(vertical: true).position(x: size.width - 9, y: size.height / 2)
+                case .bottom:
+                    strip(vertical: false).position(x: size.width / 2, y: size.height - 9)
+                default:
+                    VStack(spacing: 4) {
+                        Image(systemName: "apple.logo")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.secondary)
+                        Text("Same as macOS")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func strip(vertical: Bool) -> some View {
+        let dots = ForEach(0..<5, id: \.self) { _ in
+            RoundedRectangle(cornerRadius: 2).fill(Color.primary.opacity(0.4)).frame(width: 7, height: 7)
+        }
+        return Group {
+            if vertical {
+                VStack(spacing: 3) { dots }
+            } else {
+                HStack(spacing: 3) { dots }
+            }
+        }
+        .padding(4)
+        .background(RoundedRectangle(cornerRadius: 5).fill(Color(nsColor: .windowBackgroundColor)).shadow(color: .black.opacity(0.15), radius: 1.5, y: 0.5))
+    }
+}
