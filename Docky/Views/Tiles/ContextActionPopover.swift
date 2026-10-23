@@ -188,6 +188,7 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
             // it. `handleContextClick` builds it on demand and lets the
             // click through when it turns out empty.
             guard eventMonitor == nil else { return }
+            Self.presenters.add(self)
             eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { [weak self] event in
                 self?.handleContextClick(event) ?? event
             }
@@ -201,34 +202,57 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
             endAutohideInterruption()
             eventMonitor = nil
             anchorView = nil
+            Self.presenters.remove(self)
         }
 
-        private func handleContextClick(_ event: NSEvent) -> NSEvent? {
-            guard let view = anchorView, let window = view.window, event.window === window else {
-                return event
-            }
+        /// Every presenter on screen. Each one watches every click, so a
+        /// right-click is settled once, here, for all of them: only the
+        /// smallest item under the pointer opens its menu.
+        private static let presenters = NSHashTable<Coordinator>.weakObjects()
+        /// The click last settled, so the other presenters let it be.
+        private static var lastHandledEvent: (number: Int, timestamp: TimeInterval)?
+        /// A menu is open: clicks belong to it, never to another menu
+        /// opening on top of it.
+        private static var isPresentingMenu = false
 
+        private func handleContextClick(_ event: NSEvent) -> NSEvent? {
             let isRightClick = event.type == .rightMouseDown
             let isControlClick = event.type == .leftMouseDown && event.modifierFlags.contains(.control)
-            guard isRightClick || isControlClick else {
+            guard isRightClick || isControlClick, !Self.isPresentingMenu else {
+                return event
+            }
+            if let last = Self.lastHandledEvent,
+               last.number == event.eventNumber, last.timestamp == event.timestamp {
+                return nil
+            }
+
+            // The item under the pointer: of the presenters in this window
+            // whose visible part holds the click, the smallest one, so a
+            // row wins over the section around it.
+            let candidates = Self.presenters.allObjects.compactMap { coordinator -> (Coordinator, NSView, CGFloat)? in
+                guard let view = coordinator.anchorView, let window = view.window,
+                      event.window === window, !view.isHiddenOrHasHiddenAncestor
+                else { return nil }
+                let visible = view.visibleRect
+                guard !visible.isEmpty, visible.contains(view.convert(event.locationInWindow, from: nil)) else {
+                    return nil
+                }
+                return (coordinator, view, visible.width * visible.height)
+            }
+            guard let (target, view, _) = candidates.min(by: { $0.2 < $1.2 }) else {
                 return event
             }
 
-            let location = view.convert(event.locationInWindow, from: nil)
-            // The part on screen only: an item scrolled out of a list, or
-            // clipped under what sits below it, keeps its bounds and would
-            // otherwise take the click meant for what is shown there.
-            guard view.visibleRect.contains(location) else {
-                return event
-            }
-
-            let actions = actionProvider(event.modifierFlags)
+            let actions = target.actionProvider(event.modifierFlags)
             guard !actions.isEmpty else {
                 return event
             }
 
-            let menu = buildMenu(actions: actions)
-            popUpCartouche(menu: menu, in: view)
+            Self.lastHandledEvent = (event.eventNumber, event.timestamp)
+            let menu = target.buildMenu(actions: actions)
+            Self.isPresentingMenu = true
+            defer { Self.isPresentingMenu = false }
+            target.popUpCartouche(menu: menu, in: view)
             return nil
         }
 
