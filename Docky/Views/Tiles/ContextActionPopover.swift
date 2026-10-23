@@ -215,7 +215,10 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
             }
 
             let location = view.convert(event.locationInWindow, from: nil)
-            guard view.bounds.contains(location) else {
+            // The part on screen only: an item scrolled out of a list, or
+            // clipped under what sits below it, keeps its bounds and would
+            // otherwise take the click meant for what is shown there.
+            guard view.visibleRect.contains(location) else {
                 return event
             }
 

@@ -153,9 +153,14 @@ func sidebarAppContextActions(
 ) -> [ContextAction] {
     guard !app.bundleIdentifier.isEmpty else { return [] }
 
-    let syntheticTile = Tile(content: .app(app))
+    // The dock's own tile when the app is pinned: the menu reads "pinned"
+    // from the tile's id, and a made-up tile would offer to pin it again.
+    let tile = TileStore.shared.tiles.first { tile in
+        guard tile.id.hasPrefix("pinned:"), case .app(let pinned) = tile.content else { return false }
+        return pinned.bundleIdentifier == app.bundleIdentifier
+    } ?? Tile(content: .app(app))
     let baseActions = MenuCatalogService.shared
-        .contextActions(for: syntheticTile, modifierFlags: modifierFlags) ?? []
+        .contextActions(for: tile, modifierFlags: modifierFlags) ?? []
     let windows = WorkspaceService.shared.appWindows(bundleIdentifier: app.bundleIdentifier)
     let withWindows = injectingAppWindowActions(windows, into: baseActions)
     let withIcon = injectingCustomIconActions(into: withWindows, for: app)
@@ -187,12 +192,29 @@ func sidebarMoveAction(forItem id: String) -> ContextAction {
 
 /// A pinned site's menu, on its tile and on its row.
 func sidebarSiteContextActions(for site: SidebarPinnedSite) -> [ContextAction] {
-    [
-        .action("Open in New Tab") { BrowserTabsService.shared.open(site.url) },
+    let browserTabs = BrowserTabsService.shared
+    let openTabs = (browserTabs.tabs ?? []).filter { site.matches($0.url) }
+    var actions: [ContextAction] = [
+        .action("Open in New Tab") { browserTabs.open(site.url) },
         .divider,
-        .action("Unpin") { SidebarPreferences.shared.unpin(site) },
+        .action("Unpin") {
+            SidebarPreferences.shared.move(item: SidebarPinnedItem.site(site).id, to: .top)
+            SidebarPreferences.shared.unpin(site)
+        },
         sidebarMoveAction(forItem: SidebarPinnedItem.site(site).id)
     ]
+    // The site's open tabs close from here, as an app quits from its tile.
+    if !openTabs.isEmpty {
+        actions += [
+            .divider,
+            .action(openTabs.count == 1 ? "Close Tab" : "Close \(openTabs.count) Tabs") {
+                for tab in openTabs {
+                    browserTabs.close(tab)
+                }
+            }
+        ]
+    }
+    return actions
 }
 
 /// "Pin" for an open app that is not among the pinned tiles, "Unpin" for
@@ -203,6 +225,8 @@ private func sidebarPinAction(for app: AppTile) -> ContextAction? {
 
     let isPinned = sidebarIsPinned(bundleIdentifier)
     return .action(isPinned ? "Unpin" : "Pin") {
+        // Pinned again later, it starts back at the top.
+        SidebarPreferences.shared.move(item: SidebarPinnedItem.app(app).id, to: .top)
         TileStore.shared.setPinnedApp(bundleIdentifier: bundleIdentifier, pinned: !isPinned)
     }
 }
