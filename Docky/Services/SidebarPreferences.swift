@@ -20,7 +20,7 @@ final class SidebarPreferences: ObservableObject {
     /// Width of the full sidebar until it is resized, and the range it
     /// can be dragged across.
     static let defaultFullWidth: CGFloat = 200
-    static let fullWidthRange: ClosedRange<CGFloat> = 180...420
+    static let fullWidthRange: ClosedRange<CGFloat> = 140...420
     /// Width of the compact sidebar, the icon-only rail.
     static let railWidth: CGFloat = 52
     /// Height of the bar along the bottom of the screen, in both forms.
