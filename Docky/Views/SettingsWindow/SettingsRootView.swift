@@ -6,6 +6,10 @@
 import SwiftUI
 
 private enum SettingsPane: String, CaseIterable, Identifiable {
+    case sidebarLayout
+    case sidebarAppearance
+    case sidebarContent
+    case sidebarWidgets
     case profiles
     case appearanceGeneral
     case appearanceIndicators
@@ -37,6 +41,10 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .sidebarLayout: "Layout"
+        case .sidebarAppearance: "Appearance"
+        case .sidebarContent: "Content"
+        case .sidebarWidgets: "Widgets"
         case .profiles: "Profiles"
         case .appearanceGeneral: "General"
         case .appearanceIndicators: "Indicators"
@@ -68,6 +76,10 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
 
     var symbolName: String {
         switch self {
+        case .sidebarLayout: "sidebar.left"
+        case .sidebarAppearance: "paintpalette"
+        case .sidebarContent: "square.grid.2x2"
+        case .sidebarWidgets: "rectangle.3.group"
         case .profiles: "person.crop.rectangle.stack"
         case .appearanceGeneral: "slider.horizontal.3"
         case .appearanceIndicators: "circle.bottomhalf.filled"
@@ -99,6 +111,10 @@ private enum SettingsPane: String, CaseIterable, Identifiable {
 
     var tileColor: Color {
         switch self {
+        case .sidebarLayout: .orange
+        case .sidebarAppearance: .pink
+        case .sidebarContent: .teal
+        case .sidebarWidgets: .purple
         case .profiles: .indigo
         case .appearanceGeneral: .teal
         case .appearanceIndicators: .green
@@ -137,6 +153,12 @@ private struct SettingsSection: Identifiable {
 }
 
 private let settingsSections: [SettingsSection] = [
+    SettingsSection(id: "sidebar", title: "Sidebar", panes: [
+        .sidebarLayout,
+        .sidebarAppearance,
+        .sidebarContent,
+        .sidebarWidgets
+    ]),
     SettingsSection(id: "profiles", title: "Profiles", panes: [.profiles]),
     SettingsSection(id: "appearance", title: "Appearance", panes: [
         .appearanceThemes,
@@ -197,8 +219,9 @@ final class SettingsNavigator {
 }
 
 struct SettingsRootView: View {
-    @State private var selection: SettingsPane = .profiles
-    @State private var history: [SettingsPane] = [.profiles]
+    // The sidebar's own panes first while it is the form Docky takes.
+    @State private var selection: SettingsPane = SidebarPreferences.shared.isEnabled ? .sidebarLayout : .profiles
+    @State private var history: [SettingsPane] = [SidebarPreferences.shared.isEnabled ? .sidebarLayout : .profiles]
     @State private var historyIndex: Int = 0
     // Suppresses history pushes when the selection change originated from
     // a back/forward button rather than a fresh user navigation.
@@ -342,6 +365,14 @@ private struct SettingsDetailView: View {
     @ViewBuilder
     private var selectedView: some View {
         switch pane {
+        case .sidebarLayout:
+            SidebarSettingsView(pane: .layout)
+        case .sidebarAppearance:
+            SidebarSettingsView(pane: .appearance)
+        case .sidebarContent:
+            SidebarSettingsView(pane: .content)
+        case .sidebarWidgets:
+            SidebarSettingsView(pane: .widgets)
         case .profiles:
             ProfilesSettingsView()
         case .appearanceGeneral:

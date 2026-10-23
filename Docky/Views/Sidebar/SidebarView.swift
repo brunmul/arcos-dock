@@ -111,9 +111,6 @@ struct SidebarView: View {
             }
         }
         .padding(.bottom, 8)
-        .overlay(alignment: .trailing) {
-            SidebarResizeHandle()
-        }
     }
 
     /// Everything pinned to the dock, as two small blocks of tiles: the
@@ -556,49 +553,6 @@ private struct SidebarHeader: View {
     }
 }
 
-/// The sidebar's right edge, a few points wide: dragged, it sets the
-/// width; double-clicked, it goes back to the default one. The width is
-/// read from the pointer on screen rather than from the drag, since the
-/// panel itself widens under the drag.
-private struct SidebarResizeHandle: View {
-    @ObservedObject private var sidebar = SidebarPreferences.shared
-    @State private var isHovered = false
-
-    var body: some View {
-        Color.clear
-            .frame(width: 6)
-            .frame(maxHeight: .infinity)
-            .contentShape(Rectangle())
-            .onHover { hovering in
-                guard hovering != isHovered else { return }
-                isHovered = hovering
-                if hovering {
-                    NSCursor.resizeLeftRight.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
-            .gesture(
-                DragGesture(minimumDistance: 1)
-                    .onChanged { _ in
-                        guard let screen = SidebarWindowController.shared.screen else { return }
-                        let width = NSEvent.mouseLocation.x - screen.visibleFrame.minX
-                        let range = SidebarPreferences.fullWidthRange
-                        let clamped = min(max(width.rounded(), range.lowerBound), range.upperBound)
-                        if clamped != sidebar.fullWidth {
-                            sidebar.fullWidth = clamped
-                        }
-                    }
-            )
-            .simultaneousGesture(
-                TapGesture(count: 2).onEnded {
-                    sidebar.fullWidth = SidebarPreferences.defaultFullWidth
-                }
-            )
-            .help("Drag to resize the sidebar")
-    }
-}
-
 /// The sidebar's options, behind "…": in the header down the left, and at
 /// the end of the bar along the bottom.
 private struct SidebarOptionsMenu: View {
@@ -606,78 +560,14 @@ private struct SidebarOptionsMenu: View {
 
     var body: some View {
         Menu {
-            Picker("Position", selection: $sidebar.edge) {
-                Text("Left").tag(SidebarEdge.left)
-                Text("Bottom").tag(SidebarEdge.bottom)
-            }
-            .pickerStyle(.inline)
-            Menu("Theme") {
-                Picker("Theme", selection: $sidebar.themeID) {
-                    ForEach(SidebarTheme.all) { theme in
-                        Label {
-                            Text(theme.name)
-                        } icon: {
-                            Image(nsImage: SidebarThemeSwatch.image(for: theme))
-                        }
-                        .tag(theme.id)
-                    }
-                }
-                .pickerStyle(.inline)
-                .labelsHidden()
-            }
-            Toggle("Match Wallpaper to Theme", isOn: $sidebar.matchesWallpaper)
-            Menu("Layout") {
-                Picker("Top", selection: $sidebar.topLayout) {
-                    ForEach(SidebarLayout.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.inline)
-                Picker("Bottom", selection: $sidebar.bottomLayout) {
-                    ForEach(SidebarLayout.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.inline)
-            }
-            Menu("Widgets") {
-                ForEach(SidebarPreferences.allWidgets(in: TileStore.shared), id: \.identifier) { widget in
-                    Toggle(widget.title, isOn: Binding(
-                        get: { sidebar.shows(widget: widget) },
-                        set: { sidebar.setShows(widget: widget, $0) }
-                    ))
-                }
-            }
-            Menu("Show in Compact & Bottom Bar") {
-                ForEach(SidebarSection.allCases, id: \.self) { section in
-                    Toggle(section.title, isOn: Binding(
-                        get: { sidebar.shows(section) },
-                        set: { sidebar.setShows(section, $0) }
-                    ))
-                }
-            }
-            Divider()
-            Toggle("Open Apps Panel at Bottom Edge", isOn: $sidebar.showsBottomSwitcher)
-                .disabled(sidebar.isBottom)
-            Toggle("Hide Automatically", isOn: Binding(
-                get: { !sidebar.isPinned },
-                set: { sidebar.isPinned = !$0 }
-            ))
-            Toggle("Pinned Items Also in Apps & Web", isOn: $sidebar.showsPinnedAppsInOpenList)
-            Toggle("Show Trash", isOn: $sidebar.showsTrash)
-            Button("Pin a Folder…") {
-                sidebarPinFolder()
-            }
-            Divider()
-            Toggle("Website Icons", isOn: $sidebar.usesWebsiteIcons)
-            Toggle("Tinted Icons", isOn: $sidebar.usesTintedIcons)
-            Button("Open Icon Pack Folder") {
-                SidebarIconPack.shared.revealInFinder()
-            }
-            Divider()
+            // Every option lives in Settings → Sidebar.
             Button("Settings…") {
-                (NSApp.delegate as? AppDelegate)?.showSettingsWindow(nil)
+                SettingsNavigator.shared.requestPane(id: "sidebarLayout")
             }
+            Divider()
             Button("Switch to Dock") {
                 SidebarWindowController.shared.setSidebarMode(false)
             }
-            Divider()
             Button("Quit Docky") {
                 NSApp.terminate(nil)
             }
@@ -1537,37 +1427,6 @@ private struct SidebarSwitcherCell: View {
         .onTapGesture { item.activate() }
         .onHover { isHovered = $0 }
         .help(item.title)
-    }
-}
-
-/// A theme's round swatch for the menu: its gradient in a small disc.
-enum SidebarThemeSwatch {
-    private static var cache: [String: NSImage] = [:]
-
-    static func image(for theme: SidebarTheme) -> NSImage {
-        if let cached = cache[theme.id] { return cached }
-        let size = NSSize(width: 14, height: 14)
-        let image = NSImage(size: size, flipped: false) { rect in
-            let path = NSBezierPath(ovalIn: rect.insetBy(dx: 0.5, dy: 0.5))
-            let top = theme.isClaude ? NSColor(srgbRed: 0.961, green: 0.957, blue: 0.929, alpha: 1) : color(theme.top)
-            let bottom = theme.isClaude ? NSColor(srgbRed: 0.122, green: 0.118, blue: 0.114, alpha: 1) : color(theme.bottom)
-            NSGradient(starting: top, ending: bottom)?.draw(in: path, angle: -45)
-            NSColor.black.withAlphaComponent(0.15).setStroke()
-            path.lineWidth = 0.5
-            path.stroke()
-            return true
-        }
-        cache[theme.id] = image
-        return image
-    }
-
-    private static func color(_ hex: Int) -> NSColor {
-        NSColor(
-            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
-            green: CGFloat((hex >> 8) & 0xFF) / 255,
-            blue: CGFloat(hex & 0xFF) / 255,
-            alpha: 1
-        )
     }
 }
 
