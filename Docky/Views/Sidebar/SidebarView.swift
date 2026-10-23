@@ -104,7 +104,7 @@ struct SidebarView: View {
                     .padding(.horizontal, Self.horizontalPadding)
                     .padding(.bottom, 6)
 
-                SidebarPlaceView(items: bottomItems, widgets: bottomWidgets, layout: sidebar.bottomLayout)
+                SidebarPlaceView(items: bottomItems, widgets: bottomWidgets, layout: sidebar.bottomLayout, allItemIDs: pinnedItems.map(\.id))
                     .padding(.horizontal, Self.horizontalPadding)
             }
         }
@@ -133,7 +133,7 @@ struct SidebarView: View {
     private var pinnedTiles: some View {
         let hasTopContent = !topItems.isEmpty || !topWidgets.isEmpty
         if hasTopContent {
-            SidebarPlaceView(items: topItems, widgets: topWidgets, layout: sidebar.topLayout)
+            SidebarPlaceView(items: topItems, widgets: topWidgets, layout: sidebar.topLayout, allItemIDs: pinnedItems.map(\.id))
         }
 
         LazyVGrid(columns: SidebarMetrics.tileColumns, spacing: SidebarMetrics.tileSpacing) {
@@ -247,14 +247,7 @@ struct SidebarView: View {
     /// running, a site with a tab), whichever kind they are; within each
     /// group, apps in dock order, then sites in pinning order.
     private var pinnedItems: [SidebarPinnedItem] {
-        let items = pinnedApps.map(SidebarPinnedItem.app) + sidebar.pinnedSites.map(SidebarPinnedItem.site)
-        let isOpen: (SidebarPinnedItem) -> Bool = { item in
-            switch item {
-            case .app(let app): workspace.isRunning(bundleIdentifier: app.bundleIdentifier)
-            case .site(let site): browserTabs.tab(for: site) != nil
-            }
-        }
-        return items.filter(isOpen) + items.filter { !isOpen($0) }
+        sidebar.ordered(pinnedApps.map(SidebarPinnedItem.app) + sidebar.pinnedSites.map(SidebarPinnedItem.site))
     }
 
     /// Every running app, oldest first, minus the ones hidden from Docky.

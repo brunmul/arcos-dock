@@ -2,11 +2,9 @@
 //  SidebarHotKeyService.swift
 //  Docky
 //
-//  ⌃⌥1 to ⌃⌥9 open the first nine pinned items of the sidebar: the
-//  pinned apps in dock order, then the pinned sites in pinning order.
-//  The numbers follow that order rather than the one on screen, where the
-//  open items come first, so a shortcut keeps its target when an app
-//  launches or quits. While ⌃⌥ is held, each tile shows its number.
+//  ⌃⌥1 to ⌃⌥9 open the first nine pinned items of the sidebar, in the
+//  order they were arranged by dragging (`SidebarPreferences.pinnedOrder`).
+//  While ⌃⌥ is held, each tile shows its number.
 //
 
 import AppKit
@@ -46,7 +44,7 @@ final class SidebarHotKeyService: ObservableObject {
             }
         }
         items += SidebarPreferences.shared.pinnedSites.map(SidebarPinnedItem.site)
-        return Array(items.prefix(Self.digitKeyCodes.count))
+        return Array(SidebarPreferences.shared.ordered(items).prefix(Self.digitKeyCodes.count))
     }
 
     /// The shortcut number of a pinned item, 1 to 9, or nil past the ninth.

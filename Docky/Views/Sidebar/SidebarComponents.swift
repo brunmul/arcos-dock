@@ -9,7 +9,9 @@
 //
 
 import AppKit
+import Combine
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Metrics and shared pieces
 
@@ -493,13 +495,18 @@ struct SidebarPlaceView: View {
     let items: [SidebarPinnedItem]
     let widgets: [WidgetTile]
     let layout: SidebarLayout
+    /// Every pinned item in order, top and bottom, for dragging between
+    /// the two places.
+    let allItemIDs: [String]
+
+    @ObservedObject private var drag = SidebarPinDrag.shared
 
     var body: some View {
         switch layout {
         case .grid:
             LazyVGrid(columns: SidebarMetrics.tileColumns, spacing: SidebarMetrics.tileSpacing) {
                 ForEach(items) { item in
-                    SidebarPinnedItemTile(item: item)
+                    draggable(SidebarPinnedItemTile(item: item), item: item)
                 }
                 ForEach(widgets, id: \.identifier) { widget in
                     SidebarWidgetItem(widget: widget, isRail: true)
@@ -508,7 +515,7 @@ struct SidebarPlaceView: View {
         case .list:
             VStack(spacing: 2) {
                 ForEach(items) { item in
-                    SidebarPinnedItemRow(item: item)
+                    draggable(SidebarPinnedItemRow(item: item), item: item)
                 }
                 ForEach(widgets, id: \.identifier) { widget in
                     SidebarWidgetItem(widget: widget)
@@ -516,6 +523,70 @@ struct SidebarPlaceView: View {
             }
         }
     }
+
+    /// Dragged, an item moves live to where the pointer is over another
+    /// one, top or bottom; the order stays as it is dropped.
+    private func draggable(_ content: some View, item: SidebarPinnedItem) -> some View {
+        content
+            .opacity(drag.draggedID == item.id ? 0.4 : 1)
+            .onDrag {
+                drag.begin(item.id)
+                return NSItemProvider(object: item.id as NSString)
+            }
+            .onDrop(of: [.text], delegate: SidebarPinDropDelegate(
+                targetID: item.id,
+                allItemIDs: allItemIDs,
+                drag: drag
+            ))
+    }
+}
+
+/// The pinned item being dragged, shared by the top and bottom places.
+final class SidebarPinDrag: ObservableObject {
+    static let shared = SidebarPinDrag()
+    @Published var draggedID: String?
+
+    /// A drag let go outside the places gets no drop: the item would stay
+    /// dimmed. It is cleared once the mouse button is up.
+    func begin(_ id: String) {
+        draggedID = id
+        watchForRelease()
+    }
+
+    private func watchForRelease() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard let self, self.draggedID != nil else { return }
+            if NSEvent.pressedMouseButtons == 0 {
+                self.draggedID = nil
+            } else {
+                self.watchForRelease()
+            }
+        }
+    }
+}
+
+private struct SidebarPinDropDelegate: DropDelegate {
+    let targetID: String
+    let allItemIDs: [String]
+    let drag: SidebarPinDrag
+
+    func dropEntered(info: DropInfo) {
+        guard let dragged = drag.draggedID, dragged != targetID else { return }
+        withAnimation(SidebarMetrics.foldAnimation) {
+            SidebarPreferences.shared.movePinned(dragged, onto: targetID, allIDs: allItemIDs)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        drag.draggedID = nil
+        return true
+    }
+
+    func dropExited(info: DropInfo) {}
 }
 
 struct SidebarPinnedItemTile: View {

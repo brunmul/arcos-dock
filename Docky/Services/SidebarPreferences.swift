@@ -89,6 +89,37 @@ final class SidebarPreferences: ObservableObject {
         }
     }
 
+    // MARK: Order
+
+    /// The pinned apps and sites in the order they were arranged by
+    /// dragging, by `SidebarPinnedItem.id`. Items never dragged follow, in
+    /// the order they were pinned.
+    @Published var pinnedOrder: [String] {
+        didSet { defaults.set(pinnedOrder, forKey: Keys.pinnedOrder) }
+    }
+
+    /// `items` in the arranged order.
+    func ordered(_ items: [SidebarPinnedItem]) -> [SidebarPinnedItem] {
+        let rank = Dictionary(pinnedOrder.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        return items.enumerated().sorted { lhs, rhs in
+            let left = rank[lhs.element.id] ?? (pinnedOrder.count + lhs.offset)
+            let right = rank[rhs.element.id] ?? (pinnedOrder.count + rhs.offset)
+            return left < right
+        }.map(\.element)
+    }
+
+    /// Puts the dragged item where `target` is, in `target`'s place (top or
+    /// bottom). `allIDs` is every pinned item in its current order.
+    func movePinned(_ id: String, onto target: String, allIDs: [String]) {
+        guard id != target, var order = Optional(allIDs), let from = order.firstIndex(of: id),
+              let to = order.firstIndex(of: target)
+        else { return }
+        order.remove(at: from)
+        order.insert(id, at: to)
+        pinnedOrder = order
+        move(item: id, to: place(ofItem: target))
+    }
+
     // MARK: Custom icons
 
     /// Icons from the Claude pack worn by pinned apps and sites, by
@@ -277,6 +308,7 @@ final class SidebarPreferences: ObservableObject {
         static let fullWidth = "docky.fork.sidebar.fullWidth"
         static let bottomItemIDs = "docky.fork.sidebar.bottomItems"
         static let itemIcons = "docky.fork.sidebar.itemIcons"
+        static let pinnedOrder = "docky.fork.sidebar.pinnedOrder"
         static let topWidgetIDs = "docky.fork.sidebar.topWidgets"
         static let topLayout = "docky.fork.sidebar.topLayout"
         static let bottomLayout = "docky.fork.sidebar.bottomLayout"
@@ -316,6 +348,7 @@ final class SidebarPreferences: ObservableObject {
         showsTrash = defaults.object(forKey: Keys.showsTrash) as? Bool ?? true
         hiddenWidgetIDs = Set(defaults.stringArray(forKey: Keys.hiddenWidgetIDs) ?? [])
         bottomItemIDs = Set(defaults.stringArray(forKey: Keys.bottomItemIDs) ?? [])
+        pinnedOrder = defaults.stringArray(forKey: Keys.pinnedOrder) ?? []
         itemIcons = defaults.data(forKey: Keys.itemIcons)
             .flatMap { try? JSONDecoder().decode([String: SidebarItemIcon].self, from: $0) } ?? [:]
         topWidgetIDs = Set(defaults.stringArray(forKey: Keys.topWidgetIDs) ?? [])
