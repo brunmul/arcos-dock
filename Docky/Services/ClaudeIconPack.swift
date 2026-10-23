@@ -5,7 +5,7 @@
 //  The icons Claude offers for a project, redrawn as line SVGs (1.5 pt
 //  stroke on a 24 pt grid, in the current color), from Bruno's icon
 //  library (~/Documents/Ressources/icones/claude). A pinned app or site can
-//  wear one of them, in one of the folders' muted colors, in place of its
+//  wear one of them, drawn in the theme's colors, in place of its
 //  own icon.
 //
 

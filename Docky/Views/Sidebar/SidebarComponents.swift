@@ -193,9 +193,9 @@ func sidebarMoveAction(forItem id: String) -> ContextAction {
     }
 }
 
-/// "Icon" and "Color" for a pinned app or site: an icon from the Claude
-/// pack in place of its own, in one of the folders' colors; "Default"
-/// gives it back its own icon.
+/// "Icon" for a pinned app or site: an icon from the Claude pack in place
+/// of its own, drawn in the theme's colors; "Default" gives it back its
+/// own icon.
 func sidebarItemIconActions(forItem id: String) -> [ContextAction] {
     let preferences = SidebarPreferences.shared
     let current = preferences.itemIcons[id]
@@ -210,25 +210,11 @@ func sidebarItemIconActions(forItem id: String) -> [ContextAction] {
         }
     }
 
-    var actions: [ContextAction] = [.lazySubmenu("Icon") { iconActions }]
-    if let current {
-        actions.append(.submenu("Color", children: SidebarFolderGlyph.Tint.allCases.map { tint in
-            .action(tint.title, image: sidebarSwatch(for: tint), isOn: current.tint == tint) {
-                preferences.setIconTint(tint, forItem: id)
-            }
-        }))
-    }
-    return actions
+    return [.lazySubmenu("Icon") { iconActions }]
 }
 
-func sidebarSwatch(for tint: SidebarFolderGlyph.Tint) -> NSImage? {
-    let configuration = NSImage.SymbolConfiguration(paletteColors: [tint.nsColor])
-    return NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
-        .withSymbolConfiguration(configuration)
-}
-
-/// A Claude icon worn by a pinned app or site: the line drawing in its
-/// color on a soft wash of the same color, like a folder's tile.
+/// A Claude icon worn by a pinned app or site: the line drawing in the
+/// theme's ink on a faint wash of it, so it follows the sidebar's colors.
 struct SidebarItemIconView: View {
     let icon: SidebarItemIcon
     let size: CGFloat
@@ -236,10 +222,10 @@ struct SidebarItemIconView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let tint = Color(nsColor: icon.tint.nsColor)
+        let tint = Color.primary.opacity(0.74)
         ZStack {
             RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-                .fill(tint.opacity(colorScheme == .dark ? 0.24 : 0.15))
+                .fill(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.07))
             if let image = ClaudeIconPack.image(named: icon.name) {
                 Image(nsImage: image)
                     .renderingMode(.template)

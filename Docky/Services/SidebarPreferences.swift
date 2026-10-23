@@ -106,12 +106,7 @@ final class SidebarPreferences: ObservableObject {
             itemIcons[id] = nil
             return
         }
-        itemIcons[id] = SidebarItemIcon(name: name, tint: itemIcons[id]?.tint ?? .gray)
-    }
-
-    func setIconTint(_ tint: SidebarFolderGlyph.Tint, forItem id: String) {
-        guard let icon = itemIcons[id] else { return }
-        itemIcons[id] = SidebarItemIcon(name: icon.name, tint: tint)
+        itemIcons[id] = SidebarItemIcon(name: name)
     }
 
     // MARK: Top and bottom
@@ -631,8 +626,7 @@ enum SidebarLayout: String, CaseIterable {
 }
 
 /// An icon from the Claude pack (`ClaudeIconPack`) chosen for a pinned app
-/// or site, drawn in one of the folders' muted colors.
+/// or site, drawn in the theme's colors.
 struct SidebarItemIcon: Codable, Equatable {
     var name: String
-    var tint: SidebarFolderGlyph.Tint
 }
