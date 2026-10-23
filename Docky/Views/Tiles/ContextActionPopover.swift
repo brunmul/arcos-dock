@@ -301,7 +301,7 @@ struct ContextActionMenuPresenter: NSViewRepresentable {
             isInterruptingAutohide = false
         }
 
-        private func buildMenu(actions: [ContextAction]) -> NSMenu {
+        func buildMenu(actions: [ContextAction]) -> NSMenu {
             let menu = NSMenu()
             for action in actions {
                 addMenuItem(for: action, to: menu)

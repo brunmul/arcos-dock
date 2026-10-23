@@ -105,8 +105,8 @@ private struct SidebarWidgetShell<Trailing: View>: View {
                 )
             }
             .background(SidebarAnchorView(box: anchor))
-            .background {
-                ContextActionMenuPresenter(
+            .overlay {
+                SidebarContextMenuArea(
                     actionProvider: { _ in sidebarWidgetContextActions(for: widget) },
                     preferredEdge: .maxX
                 )

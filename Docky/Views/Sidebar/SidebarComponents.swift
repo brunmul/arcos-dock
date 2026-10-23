@@ -383,8 +383,8 @@ struct SidebarPinnedItemRow: View {
         .onTapGesture { open() }
         .onHover { isHovered = $0 }
         .help(title)
-        .background {
-            ContextActionMenuPresenter(
+        .overlay {
+            SidebarContextMenuArea(
                 actionProvider: { flags in
                     switch item {
                     case .app(let app): sidebarAppContextActions(for: app, modifierFlags: flags)
@@ -545,8 +545,8 @@ struct SidebarSiteTile: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .help(site.title.isEmpty ? (site.host ?? site.url.absoluteString) : site.title)
-        .background {
-            ContextActionMenuPresenter(
+        .overlay {
+            SidebarContextMenuArea(
                 actionProvider: { _ in sidebarSiteContextActions(for: site) },
                 preferredEdge: .maxX
             )
@@ -614,8 +614,8 @@ struct SidebarAppTile: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .help(app.displayName)
-        .background {
-            ContextActionMenuPresenter(
+        .overlay {
+            SidebarContextMenuArea(
                 actionProvider: { flags in sidebarAppContextActions(for: app, modifierFlags: flags) },
                 preferredEdge: .maxX
             )
@@ -733,8 +733,8 @@ struct SidebarFolderTileView: View {
         .onHover { isHovered = $0 }
         .help(folder.name)
         .accessibilityLabel(folder.name)
-        .background {
-            ContextActionMenuPresenter(
+        .overlay {
+            SidebarContextMenuArea(
                 actionProvider: { _ in contextActions },
                 preferredEdge: .maxX
             )
@@ -941,8 +941,8 @@ private struct SidebarFolderAppRow: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .background {
-            ContextActionMenuPresenter(
+        .overlay {
+            SidebarContextMenuArea(
                 actionProvider: { flags in sidebarAppContextActions(for: app, modifierFlags: flags) },
                 preferredEdge: .maxX
             )
@@ -1037,8 +1037,8 @@ struct SidebarTrashTile: View {
                 _ = await AppleScriptService.shared.openTrash()
             }
         }
-        .background {
-            ContextActionMenuPresenter(
+        .overlay {
+            SidebarContextMenuArea(
                 actionProvider: { _ in
                     [.action("Unpin") { SidebarPreferences.shared.showsTrash = false }]
                 },
@@ -1112,8 +1112,8 @@ struct SidebarOpenAppSection: View {
             workspace.activateOrOpen(bundleIdentifier: app.bundleIdentifier)
         }
         .onHover { isHovered = $0 }
-        .background {
-            ContextActionMenuPresenter(
+        .overlay {
+            SidebarContextMenuArea(
                 actionProvider: { flags in sidebarAppContextActions(for: appTile, modifierFlags: flags) },
                 preferredEdge: .maxX
             )
@@ -1337,8 +1337,8 @@ struct SidebarBrowserTabRow: View {
         }
         .onHover { isHovered = $0 }
         .help(tab.url?.absoluteString ?? title)
-        .background {
-            ContextActionMenuPresenter(
+        .overlay {
+            SidebarContextMenuArea(
                 actionProvider: { _ in pinActions },
                 preferredEdge: .maxX
             )
