@@ -317,6 +317,17 @@ enum SidebarPinnedItem: Identifiable {
     }
 }
 
+/// The mark under an open pinned item's icon, on its tile.
+struct SidebarOpenDot: View {
+    var body: some View {
+        Circle()
+            .fill(Color.primary.opacity(0.45))
+            .frame(width: 3, height: 3)
+            .padding(.bottom, 3)
+            .allowsHitTesting(false)
+    }
+}
+
 /// A pinned app or site as a row, for a place set to List: its icon and
 /// its name, like an open app's row.
 struct SidebarPinnedItemRow: View {
@@ -355,9 +366,6 @@ struct SidebarPinnedItemRow: View {
         HStack(spacing: SidebarMetrics.rowSpacing) {
             icon
                 .frame(width: SidebarMetrics.rowIconSize, height: SidebarMetrics.rowIconSize)
-                // Closed ones recede, as on the tiles.
-                .saturation(isOpen || isHovered ? 1 : 0.2)
-                .opacity(isOpen || isHovered ? 1 : 0.5)
 
             Text(title)
                 .font(.system(size: SidebarMetrics.rowFontSize, weight: isCurrent ? .medium : .regular))
@@ -508,17 +516,22 @@ struct SidebarSiteTile: View {
         } label: {
             icon
                 .frame(width: SidebarMetrics.tileIconSize, height: SidebarMetrics.tileIconSize)
-                // Sites with no tab open recede, so the open ones stand out.
-                .saturation(openTab != nil || isHovered ? 1 : 0.2)
-                .opacity(openTab != nil || isHovered ? 1 : 0.5)
                 .frame(maxWidth: .infinity)
                 .frame(height: SidebarMetrics.tileHeight)
+                // Every tile alike, the way Arc draws its favorites: the
+                // one in front raised in white, an open one marked by a
+                // small dot under its icon, nothing greyed out.
                 .background(SidebarItemBackground(
                     isHovered: isHovered,
                     isCurrent: isCurrent,
-                    restingOpacity: openTab != nil ? 0.11 : 0.04,
+                    restingOpacity: 0.07,
                     cornerRadius: SidebarMetrics.tileCornerRadius
                 ))
+                .overlay(alignment: .bottom) {
+                    if openTab != nil && !isCurrent {
+                        SidebarOpenDot()
+                    }
+                }
                 .overlay(alignment: .topTrailing) {
                     if hasBadge {
                         Circle()
@@ -572,17 +585,22 @@ struct SidebarAppTile: View {
             workspace.activateOrOpen(bundleIdentifier: app.bundleIdentifier)
         } label: {
             SidebarAppIcon(bundleIdentifier: app.bundleIdentifier, size: SidebarMetrics.tileIconSize)
-                // Closed apps recede, so the open ones stand out.
-                .saturation(isRunning || isHovered ? 1 : 0.2)
-                .opacity(isRunning || isHovered ? 1 : 0.5)
                 .frame(maxWidth: .infinity)
                 .frame(height: SidebarMetrics.tileHeight)
+                // Every tile alike, the way Arc draws its favorites: the
+                // one in front raised in white, an open one marked by a
+                // small dot under its icon, nothing greyed out.
                 .background(SidebarItemBackground(
                     isHovered: isHovered,
                     isCurrent: isFrontmost,
-                    restingOpacity: isRunning ? 0.11 : 0.04,
+                    restingOpacity: 0.07,
                     cornerRadius: SidebarMetrics.tileCornerRadius
                 ))
+                .overlay(alignment: .bottom) {
+                    if isRunning && !isFrontmost {
+                        SidebarOpenDot()
+                    }
+                }
                 .overlay(alignment: .topTrailing) {
                     if hasBadge {
                         Circle()
