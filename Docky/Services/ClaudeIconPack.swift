@@ -20,7 +20,12 @@ enum ClaudeIconPack {
     /// The icon as a template image, to be tinted where it is drawn.
     static func image(named name: String) -> NSImage? {
         if let cached = cache[name] { return cached }
-        guard let svg = svgs[name], let image = NSImage(data: Data(svg.utf8)), image.isValid else { return nil }
+        // Drawn small in the sidebar, the pack's 1.5 pt line thins out to
+        // under a point and gets lost on the colored themes: 2 pt keeps it
+        // legible.
+        guard let svg = svgs[name]?.replacingOccurrences(of: #"stroke-width="1.5""#, with: #"stroke-width="2""#),
+              let image = NSImage(data: Data(svg.utf8)), image.isValid
+        else { return nil }
         image.isTemplate = true
         cache[name] = image
         return image

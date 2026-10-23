@@ -222,10 +222,12 @@ struct SidebarItemIconView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let tint = Color.primary.opacity(0.74)
+        // Full-strength ink: the theme's text color reads on every theme,
+        // where a faded one got lost on the colored ones.
+        let tint = Color.primary
         ZStack {
             RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-                .fill(Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.07))
+                .fill(Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.09))
             if let image = ClaudeIconPack.image(named: icon.name) {
                 Image(nsImage: image)
                     .renderingMode(.template)
@@ -233,7 +235,7 @@ struct SidebarItemIconView: View {
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
                     .foregroundStyle(tint)
-                    .padding(size * 0.16)
+                    .padding(size * 0.1)
             }
         }
         .frame(width: size, height: size)
