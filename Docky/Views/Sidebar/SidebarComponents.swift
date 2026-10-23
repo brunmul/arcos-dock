@@ -38,6 +38,7 @@ enum SidebarMetrics {
 
 /// An app's icon, from the first of these that applies:
 ///
+///   0. the Claude icon chosen for it in its menu (`SidebarItemIcon`);
 ///   1. the custom icon pack (`SidebarIconPack`), for the apps it covers;
 ///   2. with website icons on, the icon of the app's website when one
 ///      was found (`SidebarFaviconStore`);
@@ -56,7 +57,9 @@ struct SidebarAppIcon: View {
     private static let ink = Color.primary.opacity(0.74)
 
     var body: some View {
-        if let packIcon = iconPack.icon(forBundleIdentifier: bundleIdentifier) {
+        if let custom = sidebar.itemIcons["app-\(bundleIdentifier)"] {
+            SidebarItemIconView(icon: custom, size: size)
+        } else if let packIcon = iconPack.icon(forBundleIdentifier: bundleIdentifier) {
             SidebarPackIconView(icon: packIcon, ink: Self.ink)
                 .frame(width: size, height: size)
         } else if sidebar.usesWebsiteIcons, let favicon = favicons.icon(forBundleIdentifier: bundleIdentifier) {
@@ -168,7 +171,9 @@ func sidebarAppContextActions(
     guard let pinAction = sidebarPinAction(for: app) else { return withIcon }
     var pinActions = [pinAction]
     if sidebarIsPinned(app.bundleIdentifier) {
-        pinActions.append(sidebarMoveAction(forItem: SidebarPinnedItem.app(app).id))
+        let id = SidebarPinnedItem.app(app).id
+        pinActions.append(sidebarMoveAction(forItem: id))
+        pinActions += sidebarItemIconActions(forItem: id)
     }
     return withIcon.isEmpty ? pinActions : pinActions + [.divider] + withIcon
 }
@@ -190,6 +195,67 @@ func sidebarMoveAction(forItem id: String) -> ContextAction {
     }
 }
 
+/// "Icon" and "Color" for a pinned app or site: an icon from the Claude
+/// pack in place of its own, in one of the folders' colors; "Default"
+/// gives it back its own icon.
+func sidebarItemIconActions(forItem id: String) -> [ContextAction] {
+    let preferences = SidebarPreferences.shared
+    let current = preferences.itemIcons[id]
+
+    var iconActions: [ContextAction] = [
+        .action("Default", isOn: current == nil) { preferences.setIcon(nil, forItem: id) },
+        .divider
+    ]
+    iconActions += ClaudeIconPack.names.map { name in
+        .action(ClaudeIconPack.title(of: name), image: ClaudeIconPack.image(named: name), isOn: current?.name == name) {
+            preferences.setIcon(name, forItem: id)
+        }
+    }
+
+    var actions: [ContextAction] = [.lazySubmenu("Icon") { iconActions }]
+    if let current {
+        actions.append(.submenu("Color", children: SidebarFolderGlyph.Tint.allCases.map { tint in
+            .action(tint.title, image: sidebarSwatch(for: tint), isOn: current.tint == tint) {
+                preferences.setIconTint(tint, forItem: id)
+            }
+        }))
+    }
+    return actions
+}
+
+func sidebarSwatch(for tint: SidebarFolderGlyph.Tint) -> NSImage? {
+    let configuration = NSImage.SymbolConfiguration(paletteColors: [tint.nsColor])
+    return NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
+        .withSymbolConfiguration(configuration)
+}
+
+/// A Claude icon worn by a pinned app or site: the line drawing in its
+/// color on a soft wash of the same color, like a folder's tile.
+struct SidebarItemIconView: View {
+    let icon: SidebarItemIcon
+    let size: CGFloat
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let tint = Color(nsColor: icon.tint.nsColor)
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                .fill(tint.opacity(colorScheme == .dark ? 0.24 : 0.15))
+            if let image = ClaudeIconPack.image(named: icon.name) {
+                Image(nsImage: image)
+                    .renderingMode(.template)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+                    .foregroundStyle(tint)
+                    .padding(size * 0.16)
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
 /// A pinned site's menu, on its tile and on its row.
 func sidebarSiteContextActions(for site: SidebarPinnedSite) -> [ContextAction] {
     let browserTabs = BrowserTabsService.shared
@@ -202,7 +268,7 @@ func sidebarSiteContextActions(for site: SidebarPinnedSite) -> [ContextAction] {
             SidebarPreferences.shared.unpin(site)
         },
         sidebarMoveAction(forItem: SidebarPinnedItem.site(site).id)
-    ]
+    ] + sidebarItemIconActions(forItem: SidebarPinnedItem.site(site).id)
     // The site's open tabs close from here, as an app quits from its tile.
     if !openTabs.isEmpty {
         actions += [
@@ -405,7 +471,11 @@ struct SidebarPinnedItemRow: View {
         case .app(let app):
             SidebarAppIcon(bundleIdentifier: app.bundleIdentifier, size: SidebarMetrics.rowIconSize)
         case .site(let site):
-            SidebarWebIcon(url: browserTabs.tab(for: site)?.url ?? site.url, size: SidebarMetrics.rowIconSize)
+            if let custom = SidebarPreferences.shared.itemIcons[item.id] {
+                SidebarItemIconView(icon: custom, size: SidebarMetrics.rowIconSize)
+            } else {
+                SidebarWebIcon(url: browserTabs.tab(for: site)?.url ?? site.url, size: SidebarMetrics.rowIconSize)
+            }
         }
     }
 
@@ -553,8 +623,13 @@ struct SidebarSiteTile: View {
         }
     }
 
+    @ViewBuilder
     private var icon: some View {
-        SidebarWebIcon(url: openTab?.url ?? site.url, size: SidebarMetrics.tileIconSize)
+        if let custom = SidebarPreferences.shared.itemIcons[SidebarPinnedItem.site(site).id] {
+            SidebarItemIconView(icon: custom, size: SidebarMetrics.tileIconSize)
+        } else {
+            SidebarWebIcon(url: openTab?.url ?? site.url, size: SidebarMetrics.tileIconSize)
+        }
     }
 }
 

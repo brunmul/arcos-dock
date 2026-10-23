@@ -89,6 +89,31 @@ final class SidebarPreferences: ObservableObject {
         }
     }
 
+    // MARK: Custom icons
+
+    /// Icons from the Claude pack worn by pinned apps and sites, by
+    /// `SidebarPinnedItem.id`.
+    @Published var itemIcons: [String: SidebarItemIcon] {
+        didSet {
+            if let data = try? JSONEncoder().encode(itemIcons) {
+                defaults.set(data, forKey: Keys.itemIcons)
+            }
+        }
+    }
+
+    func setIcon(_ name: String?, forItem id: String) {
+        guard let name else {
+            itemIcons[id] = nil
+            return
+        }
+        itemIcons[id] = SidebarItemIcon(name: name, tint: itemIcons[id]?.tint ?? .gray)
+    }
+
+    func setIconTint(_ tint: SidebarFolderGlyph.Tint, forItem id: String) {
+        guard let icon = itemIcons[id] else { return }
+        itemIcons[id] = SidebarItemIcon(name: icon.name, tint: tint)
+    }
+
     // MARK: Top and bottom
 
     /// Pinned apps and sites set at the bottom, with the widgets, by
@@ -256,6 +281,7 @@ final class SidebarPreferences: ObservableObject {
     private enum Keys {
         static let fullWidth = "docky.fork.sidebar.fullWidth"
         static let bottomItemIDs = "docky.fork.sidebar.bottomItems"
+        static let itemIcons = "docky.fork.sidebar.itemIcons"
         static let topWidgetIDs = "docky.fork.sidebar.topWidgets"
         static let topLayout = "docky.fork.sidebar.topLayout"
         static let bottomLayout = "docky.fork.sidebar.bottomLayout"
@@ -295,6 +321,8 @@ final class SidebarPreferences: ObservableObject {
         showsTrash = defaults.object(forKey: Keys.showsTrash) as? Bool ?? true
         hiddenWidgetIDs = Set(defaults.stringArray(forKey: Keys.hiddenWidgetIDs) ?? [])
         bottomItemIDs = Set(defaults.stringArray(forKey: Keys.bottomItemIDs) ?? [])
+        itemIcons = defaults.data(forKey: Keys.itemIcons)
+            .flatMap { try? JSONDecoder().decode([String: SidebarItemIcon].self, from: $0) } ?? [:]
         topWidgetIDs = Set(defaults.stringArray(forKey: Keys.topWidgetIDs) ?? [])
         topLayout = defaults.string(forKey: Keys.topLayout).flatMap(SidebarLayout.init(rawValue:)) ?? .grid
         bottomLayout = defaults.string(forKey: Keys.bottomLayout).flatMap(SidebarLayout.init(rawValue:)) ?? .list
@@ -599,4 +627,11 @@ enum SidebarLayout: String, CaseIterable {
     case grid, list
 
     var title: String { self == .grid ? "Grid" : "List" }
+}
+
+/// An icon from the Claude pack (`ClaudeIconPack`) chosen for a pinned app
+/// or site, drawn in one of the folders' muted colors.
+struct SidebarItemIcon: Codable, Equatable {
+    var name: String
+    var tint: SidebarFolderGlyph.Tint
 }
