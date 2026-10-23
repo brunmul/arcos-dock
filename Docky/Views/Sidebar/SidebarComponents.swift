@@ -168,12 +168,10 @@ func sidebarAppContextActions(
     let withWindows = injectingAppWindowActions(windows, into: baseActions)
     let withIcon = injectingCustomIconActions(into: withWindows, for: app)
 
-    guard let pinAction = sidebarPinAction(for: app) else { return withIcon }
-    var pinActions = [pinAction]
+    var pinActions = sidebarPinActions(for: app)
+    guard !pinActions.isEmpty else { return withIcon }
     if sidebarIsPinned(app.bundleIdentifier) {
-        let id = SidebarPinnedItem.app(app).id
-        pinActions.append(sidebarMoveAction(forItem: id))
-        pinActions += sidebarItemIconActions(forItem: id)
+        pinActions += sidebarItemIconActions(forItem: SidebarPinnedItem.app(app).id)
     }
     return withIcon.isEmpty ? pinActions : pinActions + [.divider] + withIcon
 }
@@ -185,7 +183,7 @@ private func sidebarIsPinned(_ bundleIdentifier: String) -> Bool {
     }
 }
 
-/// "Move to Bottom" for a pinned app or site at the top, "Move to Top"
+/// "Pin to Bottom" for a pinned app or site at the top, "Pin to Top"
 /// for one at the bottom.
 func sidebarMoveAction(forItem id: String) -> ContextAction {
     let preferences = SidebarPreferences.shared
@@ -283,18 +281,30 @@ func sidebarSiteContextActions(for site: SidebarPinnedSite) -> [ContextAction] {
     return actions
 }
 
-/// "Pin" for an open app that is not among the pinned tiles, "Unpin" for
-/// one that is. Nil for Finder, which the dock always keeps.
-private func sidebarPinAction(for app: AppTile) -> ContextAction? {
+/// "Pin to Top" and "Pin to Bottom" for an app that is not pinned, in one
+/// step; "Unpin" and "Pin to" the other place for one that is. None for
+/// Finder, which the dock always keeps.
+private func sidebarPinActions(for app: AppTile) -> [ContextAction] {
     let bundleIdentifier = app.bundleIdentifier
-    guard bundleIdentifier != "com.apple.finder" else { return nil }
+    guard bundleIdentifier != "com.apple.finder" else { return [] }
+    let id = SidebarPinnedItem.app(app).id
+    let preferences = SidebarPreferences.shared
 
-    let isPinned = sidebarIsPinned(bundleIdentifier)
-    return .action(isPinned ? "Unpin" : "Pin") {
-        // Pinned again later, it starts back at the top.
-        SidebarPreferences.shared.move(item: SidebarPinnedItem.app(app).id, to: .top)
-        TileStore.shared.setPinnedApp(bundleIdentifier: bundleIdentifier, pinned: !isPinned)
+    guard sidebarIsPinned(bundleIdentifier) else {
+        return [SidebarPlace.top, .bottom].map { place in
+            .action(place.pinTitle) {
+                preferences.move(item: id, to: place)
+                TileStore.shared.setPinnedApp(bundleIdentifier: bundleIdentifier, pinned: true)
+            }
+        }
     }
+    return [
+        .action("Unpin") {
+            preferences.move(item: id, to: .top)
+            TileStore.shared.setPinnedApp(bundleIdentifier: bundleIdentifier, pinned: false)
+        },
+        sidebarMoveAction(forItem: id)
+    ]
 }
 
 /// Opens the system's app search: the Apps view on recent macOS, Launchpad
@@ -1432,10 +1442,26 @@ struct SidebarBrowserTabRow: View {
         let preferences = SidebarPreferences.shared
         let title = self.title
         let tab = self.tab
-        let pinned = preferences.pinnedSite(for: url)
-        return [
-            pinned.map { site in .action("Unpin") { preferences.unpin(site) } }
-                ?? .action("Pin") { preferences.pin(site: url, title: title) },
+        let pinActions: [ContextAction]
+        if let site = preferences.pinnedSite(for: url) {
+            pinActions = [
+                .action("Unpin") {
+                    preferences.move(item: SidebarPinnedItem.site(site).id, to: .top)
+                    preferences.unpin(site)
+                },
+                sidebarMoveAction(forItem: SidebarPinnedItem.site(site).id)
+            ]
+        } else {
+            pinActions = [SidebarPlace.top, .bottom].map { place in
+                .action(place.pinTitle) {
+                    preferences.pin(site: url, title: title)
+                    if let site = preferences.pinnedSite(for: url) {
+                        preferences.move(item: SidebarPinnedItem.site(site).id, to: place)
+                    }
+                }
+            }
+        }
+        return pinActions + [
             .divider,
             .action("Close Tab") { BrowserTabsService.shared.close(tab) }
         ]

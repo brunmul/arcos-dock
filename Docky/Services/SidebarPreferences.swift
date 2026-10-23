@@ -617,8 +617,9 @@ enum SidebarPlace: String {
 
     var other: SidebarPlace { self == .top ? .bottom : .top }
 
-    /// The menu item that sends an item to the other place.
-    var moveTitle: String { self == .top ? "Move to Top" : "Move to Bottom" }
+    /// The menu item that pins an item here, or sends a pinned one here.
+    var pinTitle: String { self == .top ? "Pin to Top" : "Pin to Bottom" }
+    var moveTitle: String { pinTitle }
 }
 
 /// Tiles across, the way the pinned apps have always been shown, or one

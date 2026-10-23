@@ -18,12 +18,12 @@ Pour chaque test, note **OK** ou ce que tu vois. Si un test rate, fais une captu
 | # | Action | Attendu |
 |---|---|---|
 | A1 | Regarder la liste Apps | Les apps épinglées ouvertes n'y sont **pas**. Calculatrice y est. |
-| A2 | Clic droit sur la tuile d'une app épinglée **ouverte** | Le menu s'ouvre **sur cette app** (son nom, ses fenêtres). Il contient **Unpin**, **Move to Bottom** et **Quit**. Dans Options, **Keep in Dock est coché**. |
+| A2 | Clic droit sur la tuile d'une app épinglée **ouverte** | Le menu s'ouvre **sur cette app** (son nom, ses fenêtres). Il contient **Unpin**, **Pin to Bottom** et **Quit**. Dans Options, **Keep in Dock est coché**. |
 | A3 | Choisir **Quit** dans ce menu | L'app se ferme. Sa tuile reste en place mais grisée. |
 | A4 | Clic droit sur la tuile d'une app épinglée **fermée** | Il y a **Unpin**, mais pas **Quit**. |
 | A5 | Clic droit sur l'app épinglée ouverte → **Unpin** | La tuile disparaît du haut et l'app **apparaît aussitôt dans la liste Apps**. |
 | A6 | Clic droit sur Calculatrice dans la liste → **Pin** | Elle disparaît de la liste et apparaît **en haut** comme tuile. |
-| A7 | Clic droit sur le site épinglé **avec onglet** | Il y a **Open in New Tab**, **Unpin**, **Move to Bottom** et **Close Tab** (ou « Close N Tabs » s'il y en a plusieurs). |
+| A7 | Clic droit sur le site épinglé **avec onglet** | Il y a **Open in New Tab**, **Unpin**, **Pin to Bottom** et **Close Tab** (ou « Close N Tabs » s'il y en a plusieurs). |
 | A8 | Choisir **Close Tab** | L'onglet se ferme dans Chrome. La tuile du site reste, grisée. Il ne revient pas après 2 secondes. |
 | A9 | Clic droit sur le site épinglé **sans onglet** | Il n'y a pas de Close Tab. |
 | A10 | Site avec onglet → **Unpin** | La tuile disparaît et l'onglet **apparaît dans la liste Web**. |
@@ -42,12 +42,12 @@ Pour chaque test, note **OK** ou ce que tu vois. Si un test rate, fais une captu
 
 | # | Action | Attendu |
 |---|---|---|
-| C1 | App épinglée → **Move to Bottom** | Elle passe en bas avec les widgets, dans la disposition choisie pour le bas. Son menu propose maintenant **Move to Top**. |
+| C1 | App épinglée → **Pin to Bottom** | Elle passe en bas avec les widgets, dans la disposition choisie pour le bas. Son menu propose maintenant **Pin to Top**. |
 | C2 | App en bas → **Unpin**, puis **Pin** depuis la liste Apps | Elle revient **en haut**, pas en bas. |
-| C3 | Widget → **Move to Top** | Il passe en haut, avec les épinglés. |
+| C3 | Widget → **Pin to Top** | Il passe en haut, avec les épinglés. |
 | C4 | Widget → **Remove** | Il disparaît. Réglages → Sidebar → Widgets : son interrupteur est éteint. Le rallumer le fait revenir **à sa place**. |
 | C5 | Réglages → Content → Haut en **List** | Les épinglés du haut passent en lignes (icône et nom). Le clic droit marche sur chaque ligne comme sur les tuiles. |
-| C6 | Bas en **Grid** | Les widgets du bas deviennent des tuiles. Au survol, le détail s'ouvre. Le clic droit propose Move to Top et Remove. |
+| C6 | Bas en **Grid** | Les widgets du bas deviennent des tuiles. Au survol, le détail s'ouvre. Le clic droit propose Pin to Top et Remove. |
 
 ## Série D : bon élément sous la souris
 
@@ -56,7 +56,7 @@ Ces tests visent les menus qui s'ouvraient sur un autre élément que celui cliq
 | # | Action | Attendu |
 |---|---|---|
 | D1 | Avoir assez d'apps et d'onglets pour que la liste défile. La faire défiler à mi-hauteur. | — |
-| D2 | Clic droit sur chaque widget du bas | Le menu est **celui du widget** (Move to Top et Remove), jamais celui d'une app ou d'un onglet caché derrière. |
+| D2 | Clic droit sur chaque widget du bas | Le menu est **celui du widget** (Pin to Top et Remove), jamais celui d'une app ou d'un onglet caché derrière. |
 | D3 | Clic droit sur la première ligne visible de la liste, juste sous l'en-tête | Le menu est celui **de cette ligne**. |
 | D4 | Refaire D2 et D3 avec la liste défilée tout en bas, puis tout en haut | Même résultat. |
 
