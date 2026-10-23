@@ -17,8 +17,10 @@ import Foundation
 final class SidebarPreferences: ObservableObject {
     static let shared = SidebarPreferences()
 
-    /// Width of the full sidebar.
-    static let fullWidth: CGFloat = 200
+    /// Width of the full sidebar until it is resized, and the range it
+    /// can be dragged across.
+    static let defaultFullWidth: CGFloat = 200
+    static let fullWidthRange: ClosedRange<CGFloat> = 180...420
     /// Width of the compact sidebar, the icon-only rail.
     static let railWidth: CGFloat = 52
     /// Height of the bar along the bottom of the screen, in both forms.
@@ -145,9 +147,14 @@ final class SidebarPreferences: ObservableObject {
         didSet { defaults.set(showsTrash, forKey: Keys.showsTrash) }
     }
 
+    /// Width of the full sidebar, set by dragging its right edge.
+    @Published var fullWidth: CGFloat {
+        didSet { defaults.set(Double(fullWidth), forKey: Keys.fullWidth) }
+    }
+
     /// Width of the panel in the current mode.
     var panelWidth: CGFloat {
-        isCompact ? Self.railWidth : Self.fullWidth
+        isCompact ? Self.railWidth : fullWidth
     }
 
     /// Bundle identifiers of the open apps whose window list is unfolded.
@@ -199,6 +206,7 @@ final class SidebarPreferences: ObservableObject {
     private let defaults = UserDefaults.standard
 
     private enum Keys {
+        static let fullWidth = "docky.fork.sidebar.fullWidth"
         static let pinnedSites = "docky.fork.sidebar.pinnedSites"
         static let edge = "docky.fork.sidebar.edge"
         static let themeID = "docky.fork.sidebar.theme"
@@ -227,6 +235,8 @@ final class SidebarPreferences: ObservableObject {
         hiddenSections = Set((defaults.stringArray(forKey: Keys.hiddenSections) ?? []).compactMap(SidebarSection.init(rawValue:)))
         isPinned = defaults.object(forKey: Keys.isPinned) as? Bool ?? true
         isCompact = defaults.bool(forKey: Keys.isCompact)
+        let storedWidth = (defaults.object(forKey: Keys.fullWidth) as? Double).map { CGFloat($0) }
+        fullWidth = min(max(storedWidth ?? Self.defaultFullWidth, Self.fullWidthRange.lowerBound), Self.fullWidthRange.upperBound)
         usesTintedIcons = defaults.object(forKey: Keys.usesTintedIcons) as? Bool ?? true
         usesWebsiteIcons = defaults.object(forKey: Keys.usesWebsiteIcons) as? Bool ?? true
         showsPinnedAppsInOpenList = defaults.object(forKey: Keys.showsPinnedAppsInOpenList) as? Bool ?? true

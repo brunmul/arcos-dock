@@ -27,11 +27,12 @@ enum SidebarMetrics {
     static let tileIconSize: CGFloat = 20
     static let tileCornerRadius: CGFloat = 9
     static let tileSpacing: CGFloat = 5
-    /// Four tiles across, for the pinned apps and the pinned folders.
-    static let tileColumns = Array(
-        repeating: GridItem(.flexible(minimum: 32), spacing: tileSpacing),
-        count: 4
-    )
+    /// As many tiles across as the sidebar's width holds, for the pinned
+    /// apps and the pinned folders: four at the default width, more as
+    /// the sidebar is widened.
+    static let tileColumns = [
+        GridItem(.adaptive(minimum: 38), spacing: tileSpacing)
+    ]
     static let foldAnimation = Animation.spring(response: 0.28, dampingFraction: 0.86)
 }
 

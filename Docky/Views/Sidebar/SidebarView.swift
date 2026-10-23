@@ -5,9 +5,10 @@
 //  Content of the sidebar. It follows the layout of Arc's sidebar, top to
 //  bottom:
 //
-//    header      the Apple mark, the full / compact toggle, and a menu
-//                (auto-hide, settings, back to the dock strip); then the
-//                greeting, the date and the time (`SidebarWelcome.swift`)
+//    header      the greeting (`SidebarWelcome.swift`), then the full /
+//                compact toggle and a menu (auto-hide, settings, back to
+//                the dock strip); the greeting moves to a line of its own
+//                under them when the sidebar is too narrow for both
 //    pinned      a group that folds, two small blocks of tiles: the
 //                pinned apps, then the pinned folders and the Trash. A
 //                folder's tile lists its contents underneath
@@ -79,11 +80,8 @@ struct SidebarView: View {
     private var fullSidebar: some View {
         VStack(spacing: 0) {
             SidebarHeader()
-                .padding(.horizontal, Self.horizontalPadding)
-                .padding(.top, 8)
-
-            SidebarWelcome()
-                .padding(.horizontal, Self.horizontalPadding + 4)
+                .padding(.leading, Self.horizontalPadding + 4)
+                .padding(.trailing, Self.horizontalPadding)
                 .padding(.top, 8)
                 .padding(.bottom, 12)
 
@@ -115,6 +113,9 @@ struct SidebarView: View {
             }
         }
         .padding(.bottom, 8)
+        .overlay(alignment: .trailing) {
+            SidebarResizeHandle()
+        }
     }
 
     /// Everything pinned to the dock, as two small blocks of tiles: the
@@ -501,15 +502,32 @@ private struct SidebarConcaveCorner: Shape {
 
 // MARK: - Header
 
+/// The greeting on the left of the buttons when the width allows it,
+/// otherwise the buttons alone on the first line and the greeting under
+/// them.
 private struct SidebarHeader: View {
     @ObservedObject private var sidebar = SidebarPreferences.shared
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 2) {
+                SidebarWelcome(isInline: true)
+                Spacer(minLength: 8)
+                buttons
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 2) {
+                    Spacer(minLength: 0)
+                    buttons
+                }
+                SidebarWelcome()
+            }
+        }
+    }
+
+    private var buttons: some View {
         HStack(spacing: 2) {
-            SidebarAppleMark()
-
-            Spacer(minLength: 0)
-
             SidebarIconButton(systemName: "sidebar.left", help: "Show icons only") {
                 sidebar.isCompact = true
             }
@@ -517,6 +535,49 @@ private struct SidebarHeader: View {
             SidebarOptionsMenu()
         }
         .frame(height: 24)
+    }
+}
+
+/// The sidebar's right edge, a few points wide: dragged, it sets the
+/// width; double-clicked, it goes back to the default one. The width is
+/// read from the pointer on screen rather than from the drag, since the
+/// panel itself widens under the drag.
+private struct SidebarResizeHandle: View {
+    @ObservedObject private var sidebar = SidebarPreferences.shared
+    @State private var isHovered = false
+
+    var body: some View {
+        Color.clear
+            .frame(width: 6)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                guard hovering != isHovered else { return }
+                isHovered = hovering
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { _ in
+                        guard let screen = SidebarWindowController.shared.screen else { return }
+                        let width = NSEvent.mouseLocation.x - screen.visibleFrame.minX
+                        let range = SidebarPreferences.fullWidthRange
+                        let clamped = min(max(width.rounded(), range.lowerBound), range.upperBound)
+                        if clamped != sidebar.fullWidth {
+                            sidebar.fullWidth = clamped
+                        }
+                    }
+            )
+            .simultaneousGesture(
+                TapGesture(count: 2).onEnded {
+                    sidebar.fullWidth = SidebarPreferences.defaultFullWidth
+                }
+            )
+            .help("Drag to resize the sidebar")
     }
 }
 
@@ -635,16 +696,10 @@ private struct SidebarRail: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SidebarAppleMark()
-                .padding(.top, 8)
-
-            SidebarRailClock()
-                .padding(.top, 2)
-                .padding(.bottom, 6)
-
             SidebarIconButton(systemName: "sidebar.left", help: "Show the full sidebar") {
                 sidebar.isCompact = false
             }
+            .padding(.top, 8)
 
             // The options stay within reach in every form of the bar.
             SidebarOptionsMenu()
@@ -835,9 +890,6 @@ private struct SidebarBottomBar: View {
         HStack(spacing: 4) {
             // Left end: always there.
             HStack(spacing: 4) {
-                SidebarAppleMark()
-                SidebarRailClock()
-                    .padding(.horizontal, 2)
                 SidebarIconButton(
                     systemName: sidebar.isCompact ? "rectangle.bottomthird.inset.filled" : "rectangle.split.3x1",
                     help: sidebar.isCompact ? "Show names" : "Show icons only"

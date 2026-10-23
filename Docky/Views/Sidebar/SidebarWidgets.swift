@@ -905,7 +905,7 @@ private struct SidebarWidgetDetail: View {
                     SidebarWidgetHoverController.shared.pin(widget)
                 }
             } label: {
-                Image(systemName: isPinned ? "xmark" : "pin")
+                Image(systemName: isPinned ? "xmark" : "arrow.up.forward.square")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(isButtonHovered ? .primary : .secondary)
                     .frame(width: 20, height: 20)

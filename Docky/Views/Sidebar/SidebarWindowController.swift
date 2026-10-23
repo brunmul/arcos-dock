@@ -266,6 +266,17 @@ final class SidebarWindowController: NSObject {
             }
             .store(in: &cancellables)
 
+        // The right edge dragged: the panel follows the pointer, so no
+        // animation.
+        preferences.$fullWidth
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.applyFrame()
+            }
+            .store(in: &cancellables)
+
         // Left <-> bottom.
         preferences.$edge
             .removeDuplicates()

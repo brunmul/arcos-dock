@@ -90,6 +90,17 @@ final class WindowReservationService {
                 self?.scheduleSidebarUpdate()
             }
             .store(in: &cancellables)
+
+        // Resized by its edge: windows against it follow once the drag
+        // settles (`scheduleSidebarUpdate` waits for a pause).
+        sidebar.$fullWidth
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.scheduleSidebarUpdate()
+            }
+            .store(in: &cancellables)
     }
 
     private func updateActivation(mode: MaximizedWindowBehavior, status: PermissionStatus) {
