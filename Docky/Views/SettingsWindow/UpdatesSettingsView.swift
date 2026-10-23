@@ -11,8 +11,8 @@ struct UpdatesSettingsView: View {
     private let updateIntervals: [TimeInterval] = [3600, 86_400, 604_800, 2_629_800]
 
     var body: some View {
-        Form {
-            Section("Updates") {
+        SettingsPage {
+            SettingsBlockSection("Updates") {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Button("Check for Updates…") {
@@ -53,7 +53,6 @@ struct UpdatesSettingsView: View {
                 .padding(.vertical, 4)
             }
         }
-        .formStyle(.grouped)
     }
 
     private func title(for interval: TimeInterval) -> String {

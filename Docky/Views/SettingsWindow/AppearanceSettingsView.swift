@@ -24,7 +24,7 @@ struct AppearanceSettingsView: View {
     @State private var isShowingResetConfirmation = false
 
     var body: some View {
-        Form {
+        SettingsPage {
             switch subsection {
             case .general:
                 generalSection
@@ -40,7 +40,6 @@ struct AppearanceSettingsView: View {
                 widgetsSection
             }
         }
-        .formStyle(.grouped)
         .confirmationDialog(
             "Reset appearance settings?",
             isPresented: $isShowingResetConfirmation
@@ -56,7 +55,7 @@ struct AppearanceSettingsView: View {
 
     @ViewBuilder
     private var generalSection: some View {
-        Section("Glass") {
+        SettingsBlockSection("Glass") {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle("Disable Glass Look", isOn: $preferences.disablesGlassLook)
                     .font(.headline)
@@ -68,7 +67,7 @@ struct AppearanceSettingsView: View {
             .padding(.vertical, 4)
         }
 
-        Section("Reset Appearance") {
+        SettingsBlockSection("Reset Appearance") {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Restores the appearance preferences (indicators, tile layout, window shape, window background, glass) to their defaults. App icons, behavior, widgets, launchpad, and window-management settings keep their current values.")
                     .foregroundStyle(.secondary)
@@ -84,21 +83,17 @@ struct AppearanceSettingsView: View {
 
     @ViewBuilder
     private var indicatorsSection: some View {
-        Section("Activity Indicator") {
+        SettingsBlockSection("Activity Indicator") {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Active Indicator Shape")
-                        .font(.headline)
+                Text("Active Indicator Shape")
+                    .font(.headline)
 
-                    Spacer()
-
-                    Picker("Active Indicator Shape", selection: $preferences.activeIndicatorShape) {
-                        ForEach(DockTileIndicatorShape.allCases) { shape in
-                            Text(shape.title).tag(shape)
-                        }
+                HStack(spacing: 10) {
+                    ForEach(DockTileIndicatorShape.allCases) { shape in
+                        ChoiceCard(title: shape.title, isSelected: preferences.activeIndicatorShape == shape) {
+                            IndicatorSketch(shape: shape)
+                        } action: { preferences.activeIndicatorShape = shape }
                     }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
                 }
 
                 if preferences.activeIndicatorShape == .image {
@@ -156,7 +151,7 @@ struct AppearanceSettingsView: View {
             )
         }
 
-        Section("Dividers") {
+        SettingsBlockSection("Dividers") {
             customDividerImageControls
         }
     }
@@ -329,21 +324,17 @@ struct AppearanceSettingsView: View {
 
     @ViewBuilder
     private var tileLayoutSection: some View {
-        Section {
+        SettingsBlockSection {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Tile Clip Shape")
-                        .font(.headline)
+                Text("Tile Clip Shape")
+                    .font(.headline)
 
-                    Spacer()
-
-                    Picker("Tile Clip Shape", selection: $preferences.tileClipShape) {
-                        ForEach(DockClipShape.allCases) { shape in
-                            Text(shape.title).tag(shape)
-                        }
+                HStack(spacing: 12) {
+                    ForEach(DockClipShape.allCases) { shape in
+                        ChoiceCard(title: shape.title, isSelected: preferences.tileClipShape == shape) {
+                            ClipShapeSketch(shape: shape)
+                        } action: { preferences.tileClipShape = shape }
                     }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
                 }
 
                 Text("Choose whether Docky tile chrome keeps the current rounded corners or uses a full circle or capsule clip.")
@@ -646,21 +637,17 @@ struct AppearanceSettingsView: View {
 
     @ViewBuilder
     private var windowShapeSection: some View {
-        Section {
+        SettingsBlockSection {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Chrome Clip Shape")
-                        .font(.headline)
+                Text("Chrome Clip Shape")
+                    .font(.headline)
 
-                    Spacer()
-
-                    Picker("Chrome Clip Shape", selection: $preferences.windowClipShape) {
-                        ForEach(DockClipShape.allCases) { shape in
-                            Text(shape.title).tag(shape)
-                        }
+                HStack(spacing: 12) {
+                    ForEach(DockClipShape.allCases) { shape in
+                        ChoiceCard(title: shape.title, isSelected: preferences.windowClipShape == shape) {
+                            ClipShapeSketch(shape: shape)
+                        } action: { preferences.windowClipShape = shape }
                     }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
                 }
 
                 Text("Choose whether the dock chrome keeps the current rounded corners or uses a full circle or capsule clip.")
@@ -766,7 +753,7 @@ struct AppearanceSettingsView: View {
 
     @ViewBuilder
     private var widgetsSection: some View {
-        Section {
+        SettingsBlockSection {
             widgetSpanBlock(
                 title: "1x Widgets",
                 paddingBinding: $preferences.widget1xContentPadding,
@@ -867,7 +854,7 @@ struct AppearanceSettingsView: View {
     }
 
     private var windowBackgroundSection: some View {
-        Section {
+        SettingsBlockSection {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Window Background Image")
                     .font(.headline)

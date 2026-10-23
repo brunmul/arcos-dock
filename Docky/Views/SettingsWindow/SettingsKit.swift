@@ -352,3 +352,100 @@ struct DockStripSketch: View {
         .background(RoundedRectangle(cornerRadius: 5).fill(Color(nsColor: .windowBackgroundColor)).shadow(color: .black.opacity(0.15), radius: 1.5, y: 0.5))
     }
 }
+
+/// A group of richer options (image pickers, color wells, nested
+/// choices) laid out as blocks on one card, for the panes whose options
+/// do not fit a single row. Switches inside sit at the right, as on the
+/// rows.
+struct SettingsBlockSection<Content: View>: View {
+    let title: String?
+    @ViewBuilder let content: () -> Content
+
+    init(_ title: String? = nil, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.content = content
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let title {
+                Text(title)
+                    .font(.headline)
+            }
+            VStack(alignment: .leading, spacing: 14) {
+                content()
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .settingsCard()
+            .toggleStyle(SettingsSwitchStyle())
+        }
+    }
+}
+
+/// A switch at the right end of its line, its label on the left.
+struct SettingsSwitchStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            configuration.label
+            Spacer(minLength: 12)
+            Toggle("", isOn: configuration.$isOn)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+    }
+}
+
+/// An app tile clipped as the choice says.
+struct ClipShapeSketch: View {
+    let shape: DockClipShape
+
+    var body: some View {
+        ZStack {
+            Color.primary.opacity(0.05)
+            Group {
+                if shape == .circle {
+                    Circle().fill(Color.primary.opacity(0.18))
+                } else {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.primary.opacity(0.18))
+                }
+            }
+            .frame(width: 44, height: 44)
+            .overlay(Image(systemName: "app.fill").font(.system(size: 18)).foregroundStyle(.secondary))
+        }
+    }
+}
+
+/// An app icon with the running marker the choice draws under it.
+struct IndicatorSketch: View {
+    let shape: DockTileIndicatorShape
+
+    var body: some View {
+        ZStack {
+            Color.primary.opacity(0.05)
+            VStack(spacing: 5) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.primary.opacity(0.18))
+                    .frame(width: 32, height: 32)
+                marker
+                    .frame(height: 5)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var marker: some View {
+        switch shape {
+        case .none:
+            Color.clear.frame(width: 5)
+        case .dot:
+            Circle().fill(Color.primary.opacity(0.6)).frame(width: 5)
+        case .pill:
+            Capsule().fill(Color.primary.opacity(0.6)).frame(width: 14)
+        case .underline:
+            Rectangle().fill(Color.primary.opacity(0.6)).frame(width: 24, height: 2)
+        case .image:
+            Image(systemName: "photo").font(.system(size: 8)).foregroundStyle(.secondary)
+        }
+    }
+}

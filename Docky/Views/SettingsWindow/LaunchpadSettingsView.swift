@@ -18,9 +18,9 @@ struct LaunchpadSettingsView: View {
     @State private var isRecordingShortcut = false
 
     var body: some View {
-        Form {
+        SettingsPage {
             if !hidesAvailabilitySection {
-                Section("Availability") {
+                SettingsBlockSection("Availability") {
                     VStack(alignment: .leading, spacing: 8) {
                         Toggle("Enable Launchpad", isOn: $preferences.enablesLaunchpadOverlay)
                             .font(.headline)
@@ -33,7 +33,7 @@ struct LaunchpadSettingsView: View {
                 }
             }
 
-            Section("Shortcut") {
+            SettingsBlockSection("Shortcut") {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .center, spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -64,7 +64,7 @@ struct LaunchpadSettingsView: View {
                 .padding(.vertical, 4)
             }
 
-            Section("Layout") {
+            SettingsBlockSection("Layout") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Scroll Direction")
@@ -169,7 +169,7 @@ struct LaunchpadSettingsView: View {
                 .padding(.vertical, 4)
             }
 
-            Section("Appearance") {
+            SettingsBlockSection("Appearance") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Transparency")
@@ -227,7 +227,6 @@ struct LaunchpadSettingsView: View {
                 .padding(.vertical, 4)
             }
         }
-        .formStyle(.grouped)
     }
 
     private var launchpadTransparencyBinding: Binding<CGFloat> {

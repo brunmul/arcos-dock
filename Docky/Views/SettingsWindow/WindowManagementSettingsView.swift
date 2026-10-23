@@ -35,8 +35,8 @@ struct WindowManagementSettingsView: View {
     }
 
     var body: some View {
-        Form {
-            Section("Window Switcher") {
+        SettingsPage {
+            SettingsBlockSection("Window Switcher") {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle("Enable Window Switcher", isOn: $preferences.enablesWindowSwitcher)
                         .font(.headline)
@@ -169,7 +169,7 @@ struct WindowManagementSettingsView: View {
                 .disabled(!preferences.enablesWindowSwitcher)
             }
 
-            Section("Window Preview") {
+            SettingsBlockSection("Window Preview") {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Hover Delay")
@@ -222,7 +222,6 @@ struct WindowManagementSettingsView: View {
                 .padding(.vertical, 4)
             }
         }
-        .formStyle(.grouped)
     }
 
     private func actionKeyRow(

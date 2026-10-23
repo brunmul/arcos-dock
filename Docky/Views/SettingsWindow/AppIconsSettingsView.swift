@@ -14,8 +14,8 @@ struct AppIconsSettingsView: View {
     @State private var otherAppsLoaded = false
 
     var body: some View {
-        Form {
-            Section("Trash") {
+        SettingsPage {
+            SettingsBlockSection("Trash") {
                 Text("Pick custom images for the Trash tile's empty and full states. Both default to the system Trash icons.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -26,7 +26,7 @@ struct AppIconsSettingsView: View {
                 }
             }
 
-            Section("Folders") {
+            SettingsBlockSection("Folders") {
                 Text("Pick custom images for any folder tile currently in the dock. Each folder defaults to its system icon.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -42,7 +42,7 @@ struct AppIconsSettingsView: View {
                 }
             }
 
-            Section("Launchpad") {
+            SettingsBlockSection("Launchpad") {
                 Text("Pick a custom image for the Launchpad tile. Defaults to the system Launchpad icon.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -51,7 +51,7 @@ struct AppIconsSettingsView: View {
                     .padding(.vertical, 4)
             }
 
-            Section("Start Menu") {
+            SettingsBlockSection("Start Menu") {
                 Text("Pick a custom image for the Start Menu tile. Defaults to Docky's own app icon.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -60,7 +60,7 @@ struct AppIconsSettingsView: View {
                     .padding(.vertical, 4)
             }
 
-            Section("Overrides") {
+            SettingsBlockSection("Overrides") {
                 Text("Choose a custom image for any app Docky currently knows about. Custom app icons follow Docky's circle tile clipping when circle tiles are enabled.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -76,7 +76,7 @@ struct AppIconsSettingsView: View {
                 }
             }
 
-            Section("Other Apps") {
+            SettingsBlockSection("Other Apps") {
                 Text("Apps installed on this Mac that aren't currently in your dock. Set their icon ahead of time and it'll be ready when you add them.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -99,7 +99,6 @@ struct AppIconsSettingsView: View {
                 }
             }
         }
-        .formStyle(.grouped)
         .task(id: dockBundleIDsSignature) {
             await refreshOtherApps()
         }

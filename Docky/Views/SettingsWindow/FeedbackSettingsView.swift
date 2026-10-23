@@ -27,8 +27,8 @@ struct FeedbackSettingsView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        Form {
-            Section("What's going on?") {
+        SettingsPage {
+            SettingsBlockSection("What's going on?") {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Describe the issue, idea, or feedback. The diagnostic bundle below is attached automatically so the maintainer can replicate your setup.")
                         .foregroundStyle(.secondary)
@@ -78,7 +78,7 @@ struct FeedbackSettingsView: View {
                 .padding(.vertical, 4)
             }
 
-            Section("What gets sent") {
+            SettingsBlockSection("What gets sent") {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("Your message", systemImage: "text.alignleft")
                     Label("Docky preferences (every `docky.*` UserDefaults key)", systemImage: "doc.text")
@@ -93,7 +93,7 @@ struct FeedbackSettingsView: View {
                 .padding(.vertical, 4)
             }
 
-            Section {
+            SettingsBlockSection {
                 HStack {
                     if let errorMessage {
                         Text(errorMessage)
@@ -107,7 +107,6 @@ struct FeedbackSettingsView: View {
                 }
             }
         }
-        .formStyle(.grouped)
     }
 
     private func chooseAttachment() {

@@ -15,14 +15,14 @@ struct ProfilesSettingsView: View {
     @Bindable private var preferences = DockyPreferences.shared
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsBlockSection {
                 Text("Dock profiles each keep their own pinned apps, trailing items, widgets, and hidden-app list. Switch between them from the small ball at the leading edge of the dock.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Section("Switcher") {
+            SettingsBlockSection("Switcher") {
                 Toggle(isOn: $preferences.hidesProfileStrip) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Hide profile switcher")
@@ -34,7 +34,7 @@ struct ProfilesSettingsView: View {
                 }
             }
 
-            Section("Profiles") {
+            SettingsBlockSection("Profiles") {
                 ForEach(profileService.profiles) { profile in
                     ProfileRow(profile: profile)
                         .padding(.vertical, 2)
@@ -47,7 +47,6 @@ struct ProfilesSettingsView: View {
                 }
             }
         }
-        .formStyle(.grouped)
     }
 
     private func addProfile() {

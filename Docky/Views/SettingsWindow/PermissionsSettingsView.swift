@@ -9,7 +9,7 @@ struct PermissionsSettingsView: View {
     @ObservedObject private var service = PermissionsService.shared
 
     var body: some View {
-        Form {
+        SettingsPage {
             permissionSection(for: .userFolders)
             permissionSection(for: .finderAutomation)
             permissionSection(for: .accessibility)
@@ -18,18 +18,17 @@ struct PermissionsSettingsView: View {
             permissionSection(for: .calendar)
             permissionSection(for: .reminders)
 
-            Section {
+            SettingsBlockSection {
                 Button("Re-check Permissions") {
                     service.refresh()
                 }
             }
         }
-        .formStyle(.grouped)
     }
 
     @ViewBuilder
     private func permissionSection(for permission: Permission) -> some View {
-        Section(permission.title) {
+        SettingsBlockSection(permission.title) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Status")

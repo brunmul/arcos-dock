@@ -10,8 +10,8 @@ struct HiddenAppsSettingsView: View {
     @Bindable private var preferences = DockyPreferences.shared
 
     var body: some View {
-        Form {
-            Section("Restore") {
+        SettingsPage {
+            SettingsBlockSection("Restore") {
                 Text("Apps hidden with \"Hide in Docky\" stay out of Docky's pinned and running app surfaces until you restore them here.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -27,7 +27,6 @@ struct HiddenAppsSettingsView: View {
                 }
             }
         }
-        .formStyle(.grouped)
     }
 
     private var hiddenApps: [HiddenAppSettingsEntry] {

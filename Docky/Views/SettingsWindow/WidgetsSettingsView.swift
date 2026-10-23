@@ -23,10 +23,9 @@ struct WidgetsSettingsView: View {
     @State private var installingIdentifiers: Set<String> = []
 
     var body: some View {
-        Form {
+        SettingsPage {
             unlockedContent
         }
-        .formStyle(.grouped)
         .navigationTitle("Widget Store")
         .onAppear {
             refresh()
@@ -61,7 +60,7 @@ struct WidgetsSettingsView: View {
     @ViewBuilder
     private var unlockedContent: some View {
         if hasPendingChanges {
-            Section {
+            SettingsBlockSection {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "arrow.clockwise.circle.fill")
                         .foregroundStyle(.tint)
@@ -81,18 +80,18 @@ struct WidgetsSettingsView: View {
             }
         }
 
-        Section("Security") {
+        SettingsBlockSection("Security") {
             Toggle("Allow installing widgets from links", isOn: $prefs.allowsWidgetLinkInstalls)
             Text("Links like `docky://install-widget` let a web page install a widget. Off by default. Widgets are native plugins that run inside Docky with the same access Docky has — Accessibility, Automation, files, and more — and Docky doesn't sandbox or verify them, so only install widgets you trust. Installing a `.dockywidget` file yourself always works.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
 
-        Section("Marketplace") {
+        SettingsBlockSection("Marketplace") {
             marketplaceSection
         }
 
-        Section("Installed Widgets") {
+        SettingsBlockSection("Installed Widgets") {
             if entries.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("No widgets installed yet.")
@@ -108,7 +107,7 @@ struct WidgetsSettingsView: View {
             }
         }
 
-        Section {
+        SettingsBlockSection {
             Grid(horizontalSpacing: 12, verticalSpacing: 12) {
                 GridRow {
                     actionButton(

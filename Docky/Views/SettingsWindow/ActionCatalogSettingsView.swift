@@ -9,8 +9,8 @@ struct ActionCatalogSettingsView: View {
     @ObservedObject private var catalog = MenuCatalogService.shared
 
     var body: some View {
-        Form {
-            Section("About Actions") {
+        SettingsPage {
+            SettingsBlockSection("About Actions") {
                 Text("Actions are menu items Docky injects into each tile's right-click menu. A catalog package ships a curated bundle of them; once it's loaded, every action it defines is automatically available on the matching tile type. Apps, folders, the Trash, the Launchpad, and the divider all get their own set, with no per-tile setup needed.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -20,7 +20,7 @@ struct ActionCatalogSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Section("Catalog Packages") {
+            SettingsBlockSection("Catalog Packages") {
                 if catalog.packageSummaries.isEmpty {
                     Text("No catalog packages loaded.")
                         .foregroundStyle(.secondary)
@@ -49,7 +49,7 @@ struct ActionCatalogSettingsView: View {
                 }
             }
 
-            Section("Scripted Actions") {
+            SettingsBlockSection("Scripted Actions") {
                 Text("Docky loads action definitions from bundled JSON. Future curated packages can add actions and append menu items at approved insertion points without replacing Docky's core menus.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -67,7 +67,7 @@ struct ActionCatalogSettingsView: View {
             }
 
             if !catalog.diagnostics.isEmpty {
-                Section("Diagnostics") {
+                SettingsBlockSection("Diagnostics") {
                     ForEach(Array(catalog.diagnostics.enumerated()), id: \.offset) { item in
                         Text(item.element)
                             .font(.callout.monospaced())
@@ -77,6 +77,5 @@ struct ActionCatalogSettingsView: View {
                 }
             }
         }
-        .formStyle(.grouped)
     }
 }

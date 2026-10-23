@@ -23,8 +23,8 @@ struct ThemesSettingsView: View {
     @State private var importErrorMessage: String?
 
     var body: some View {
-        Form {
-            Section("Active") {
+        SettingsPage {
+            SettingsBlockSection("Active") {
                 if let active = manager.activeManifest {
                     activeThemeRow(active)
                 } else {
@@ -49,7 +49,7 @@ struct ThemesSettingsView: View {
                 }
             }
 
-            Section("Installed Themes") {
+            SettingsBlockSection("Installed Themes") {
                 let installed = manager.installedThemes.values
                     .sorted { $0.manifest.name.localizedCaseInsensitiveCompare($1.manifest.name) == .orderedAscending }
 
@@ -68,7 +68,7 @@ struct ThemesSettingsView: View {
                 }
             }
 
-            Section {
+            SettingsBlockSection {
                 Grid(horizontalSpacing: 12, verticalSpacing: 12) {
                     GridRow {
                         themesActionButton(
@@ -97,7 +97,6 @@ struct ThemesSettingsView: View {
                 }
             }
         }
-        .formStyle(.grouped)
         .confirmationDialog(
             "Delete this theme?",
             isPresented: deletionDialogBinding,
