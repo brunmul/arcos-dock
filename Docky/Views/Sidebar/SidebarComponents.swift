@@ -161,7 +161,38 @@ func sidebarAppContextActions(
     let withIcon = injectingCustomIconActions(into: withWindows, for: app)
 
     guard let pinAction = sidebarPinAction(for: app) else { return withIcon }
-    return withIcon.isEmpty ? [pinAction] : [pinAction, .divider] + withIcon
+    var pinActions = [pinAction]
+    if sidebarIsPinned(app.bundleIdentifier) {
+        pinActions.append(sidebarMoveAction(forItem: SidebarPinnedItem.app(app).id))
+    }
+    return withIcon.isEmpty ? pinActions : pinActions + [.divider] + withIcon
+}
+
+private func sidebarIsPinned(_ bundleIdentifier: String) -> Bool {
+    TileStore.shared.tiles.contains { tile in
+        guard tile.id.hasPrefix("pinned:"), case .app(let pinned) = tile.content else { return false }
+        return pinned.bundleIdentifier == bundleIdentifier
+    }
+}
+
+/// "Move to Bottom" for a pinned app or site at the top, "Move to Top"
+/// for one at the bottom.
+func sidebarMoveAction(forItem id: String) -> ContextAction {
+    let preferences = SidebarPreferences.shared
+    let destination = preferences.place(ofItem: id).other
+    return .action(destination.moveTitle) {
+        preferences.move(item: id, to: destination)
+    }
+}
+
+/// A pinned site's menu, on its tile and on its row.
+func sidebarSiteContextActions(for site: SidebarPinnedSite) -> [ContextAction] {
+    [
+        .action("Open in New Tab") { BrowserTabsService.shared.open(site.url) },
+        .divider,
+        .action("Unpin") { SidebarPreferences.shared.unpin(site) },
+        sidebarMoveAction(forItem: SidebarPinnedItem.site(site).id)
+    ]
 }
 
 /// "Pin" for an open app that is not among the pinned tiles, "Unpin" for
@@ -170,11 +201,7 @@ private func sidebarPinAction(for app: AppTile) -> ContextAction? {
     let bundleIdentifier = app.bundleIdentifier
     guard bundleIdentifier != "com.apple.finder" else { return nil }
 
-    let isPinned = TileStore.shared.tiles.contains { tile in
-        guard tile.id.hasPrefix("pinned:"), case .app(let pinned) = tile.content else { return false }
-        return pinned.bundleIdentifier == bundleIdentifier
-    }
-
+    let isPinned = sidebarIsPinned(bundleIdentifier)
     return .action(isPinned ? "Unpin" : "Pin") {
         TileStore.shared.setPinnedApp(bundleIdentifier: bundleIdentifier, pinned: !isPinned)
     }
@@ -252,20 +279,6 @@ struct SidebarItemBackground: View {
 
 // MARK: - Pinned apps
 
-/// Pinned apps as a grid of small tiles, like the favorites at the top of
-/// Arc's sidebar. A dot marks the ones that are running.
-struct SidebarFavoritesGrid: View {
-    let items: [SidebarPinnedItem]
-
-    var body: some View {
-        LazyVGrid(columns: SidebarMetrics.tileColumns, spacing: SidebarMetrics.tileSpacing) {
-            ForEach(items) { item in
-                SidebarPinnedItemTile(item: item)
-            }
-        }
-    }
-}
-
 /// A pinned app or a pinned site: they share one list, so the open ones of
 /// both kinds can come first together.
 enum SidebarPinnedItem: Identifiable {
@@ -276,6 +289,131 @@ enum SidebarPinnedItem: Identifiable {
         switch self {
         case .app(let app): "app-\(app.bundleIdentifier)"
         case .site(let site): "site-\(site.id)"
+        }
+    }
+}
+
+/// A pinned app or site as a row, for a place set to List: its icon and
+/// its name, like an open app's row.
+struct SidebarPinnedItemRow: View {
+    let item: SidebarPinnedItem
+
+    @ObservedObject private var workspace = WorkspaceService.shared
+    @ObservedObject private var browserTabs = BrowserTabsService.shared
+    @State private var isHovered = false
+
+    private var title: String {
+        switch item {
+        case .app(let app): app.displayName
+        case .site(let site): site.title.isEmpty ? (site.host ?? site.url.absoluteString) : site.title
+        }
+    }
+
+    private var isOpen: Bool {
+        switch item {
+        case .app(let app): workspace.isRunning(bundleIdentifier: app.bundleIdentifier)
+        case .site(let site): browserTabs.tab(for: site) != nil
+        }
+    }
+
+    private var isCurrent: Bool {
+        switch item {
+        case .app(let app):
+            return workspace.frontmostBundleIdentifier == app.bundleIdentifier
+        case .site(let site):
+            guard let tab = browserTabs.tab(for: site) else { return false }
+            return workspace.frontmostBundleIdentifier == BrowserTabsService.browserBundleIdentifier
+                && tab.isActive && tab.isInFrontWindow
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: SidebarMetrics.rowSpacing) {
+            icon
+                .frame(width: SidebarMetrics.rowIconSize, height: SidebarMetrics.rowIconSize)
+                // Closed ones recede, as on the tiles.
+                .saturation(isOpen || isHovered ? 1 : 0.2)
+                .opacity(isOpen || isHovered ? 1 : 0.5)
+
+            Text(title)
+                .font(.system(size: SidebarMetrics.rowFontSize, weight: isCurrent ? .medium : .regular))
+                .foregroundStyle(isOpen ? .primary : .secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, SidebarMetrics.rowPadding)
+        .padding(.trailing, 5)
+        .frame(height: SidebarMetrics.rowHeight)
+        .background(SidebarItemBackground(isHovered: isHovered, isCurrent: isCurrent))
+        .contentShape(Rectangle())
+        .onTapGesture { open() }
+        .onHover { isHovered = $0 }
+        .help(title)
+        .background {
+            ContextActionMenuPresenter(
+                actionProvider: { flags in
+                    switch item {
+                    case .app(let app): sidebarAppContextActions(for: app, modifierFlags: flags)
+                    case .site(let site): sidebarSiteContextActions(for: site)
+                    }
+                },
+                preferredEdge: .maxX
+            )
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(.default) { open() }
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        switch item {
+        case .app(let app):
+            SidebarAppIcon(bundleIdentifier: app.bundleIdentifier, size: SidebarMetrics.rowIconSize)
+        case .site(let site):
+            SidebarWebIcon(url: browserTabs.tab(for: site)?.url ?? site.url, size: SidebarMetrics.rowIconSize)
+        }
+    }
+
+    private func open() {
+        switch item {
+        case .app(let app): workspace.activateOrOpen(bundleIdentifier: app.bundleIdentifier)
+        case .site(let site): browserTabs.openOrFocus(site)
+        }
+    }
+}
+
+/// What one place of the sidebar holds, top or bottom: pinned apps and
+/// sites, and widgets, drawn as tiles or as rows. Tiles of every kind
+/// share one grid; a widget's tile is its icon, with its detail on hover
+/// as on its row.
+struct SidebarPlaceView: View {
+    let items: [SidebarPinnedItem]
+    let widgets: [WidgetTile]
+    let layout: SidebarLayout
+
+    var body: some View {
+        switch layout {
+        case .grid:
+            LazyVGrid(columns: SidebarMetrics.tileColumns, spacing: SidebarMetrics.tileSpacing) {
+                ForEach(items) { item in
+                    SidebarPinnedItemTile(item: item)
+                }
+                ForEach(widgets, id: \.identifier) { widget in
+                    SidebarWidgetItem(widget: widget, isRail: true)
+                }
+            }
+        case .list:
+            VStack(spacing: 2) {
+                ForEach(items) { item in
+                    SidebarPinnedItemRow(item: item)
+                }
+                ForEach(widgets, id: \.identifier) { widget in
+                    SidebarWidgetItem(widget: widget)
+                }
+            }
         }
     }
 }
@@ -372,15 +510,7 @@ struct SidebarSiteTile: View {
         .help(site.title.isEmpty ? (site.host ?? site.url.absoluteString) : site.title)
         .background {
             ContextActionMenuPresenter(
-                actionProvider: { _ in
-                    [
-                        .action("Open in New Tab") { BrowserTabsService.shared.open(site.url) },
-                        .divider,
-                        .action("Unpin") {
-                            SidebarPreferences.shared.unpin(site)
-                        }
-                    ]
-                },
+                actionProvider: { _ in sidebarSiteContextActions(for: site) },
                 preferredEdge: .maxX
             )
         }

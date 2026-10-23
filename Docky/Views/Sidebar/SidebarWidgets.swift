@@ -54,6 +54,21 @@ struct SidebarWidgetItem: View {
 
 // MARK: - Shell
 
+/// A widget's menu: to the other place, or off the sidebar. A removed
+/// widget comes back from "…" → Widgets.
+func sidebarWidgetContextActions(for widget: WidgetTile) -> [ContextAction] {
+    let preferences = SidebarPreferences.shared
+    let destination = preferences.place(of: widget).other
+    return [
+        .action(destination.moveTitle) { preferences.move(widget, to: destination) },
+        .divider,
+        .action("Remove") {
+            SidebarWidgetHoverController.shared.hide()
+            preferences.setShows(widget: widget, false)
+        }
+    ]
+}
+
 /// The frame every widget shares: the row or tile, its hover state, and the
 /// link to the hover detail. A widget supplies its icon, its line of text
 /// and what sits on the right.
@@ -90,6 +105,12 @@ private struct SidebarWidgetShell<Trailing: View>: View {
                 )
             }
             .background(SidebarAnchorView(box: anchor))
+            .background {
+                ContextActionMenuPresenter(
+                    actionProvider: { _ in sidebarWidgetContextActions(for: widget) },
+                    preferredEdge: .maxX
+                )
+            }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(title)
     }

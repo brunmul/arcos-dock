@@ -89,6 +89,54 @@ final class SidebarPreferences: ObservableObject {
         }
     }
 
+    // MARK: Top and bottom
+
+    /// Pinned apps and sites set at the bottom, with the widgets, by
+    /// `SidebarPinnedItem.id`. The others sit at the top.
+    @Published var bottomItemIDs: Set<String> {
+        didSet { defaults.set(Array(bottomItemIDs), forKey: Keys.bottomItemIDs) }
+    }
+
+    /// Widgets set at the top, with the pinned apps, by identifier. The
+    /// others sit at the bottom.
+    @Published var topWidgetIDs: Set<String> {
+        didSet { defaults.set(Array(topWidgetIDs), forKey: Keys.topWidgetIDs) }
+    }
+
+    /// How each place draws what it holds: tiles at the top, rows at the
+    /// bottom, until changed in "…" → Layout.
+    @Published var topLayout: SidebarLayout {
+        didSet { defaults.set(topLayout.rawValue, forKey: Keys.topLayout) }
+    }
+
+    @Published var bottomLayout: SidebarLayout {
+        didSet { defaults.set(bottomLayout.rawValue, forKey: Keys.bottomLayout) }
+    }
+
+    func place(ofItem id: String) -> SidebarPlace {
+        bottomItemIDs.contains(id) ? .bottom : .top
+    }
+
+    func move(item id: String, to place: SidebarPlace) {
+        if place == .bottom {
+            bottomItemIDs.insert(id)
+        } else {
+            bottomItemIDs.remove(id)
+        }
+    }
+
+    func place(of widget: WidgetTile) -> SidebarPlace {
+        topWidgetIDs.contains(widget.identifier) ? .top : .bottom
+    }
+
+    func move(_ widget: WidgetTile, to place: SidebarPlace) {
+        if place == .top {
+            topWidgetIDs.insert(widget.identifier)
+        } else {
+            topWidgetIDs.remove(widget.identifier)
+        }
+    }
+
     /// Every widget the bar can show: the dock's, but the bare date.
     static func allWidgets(in store: TileStore) -> [WidgetTile] {
         store.tiles.compactMap { tile in
@@ -207,6 +255,10 @@ final class SidebarPreferences: ObservableObject {
 
     private enum Keys {
         static let fullWidth = "docky.fork.sidebar.fullWidth"
+        static let bottomItemIDs = "docky.fork.sidebar.bottomItems"
+        static let topWidgetIDs = "docky.fork.sidebar.topWidgets"
+        static let topLayout = "docky.fork.sidebar.topLayout"
+        static let bottomLayout = "docky.fork.sidebar.bottomLayout"
         static let pinnedSites = "docky.fork.sidebar.pinnedSites"
         static let edge = "docky.fork.sidebar.edge"
         static let themeID = "docky.fork.sidebar.theme"
@@ -242,6 +294,10 @@ final class SidebarPreferences: ObservableObject {
         showsPinnedAppsInOpenList = defaults.object(forKey: Keys.showsPinnedAppsInOpenList) as? Bool ?? true
         showsTrash = defaults.object(forKey: Keys.showsTrash) as? Bool ?? true
         hiddenWidgetIDs = Set(defaults.stringArray(forKey: Keys.hiddenWidgetIDs) ?? [])
+        bottomItemIDs = Set(defaults.stringArray(forKey: Keys.bottomItemIDs) ?? [])
+        topWidgetIDs = Set(defaults.stringArray(forKey: Keys.topWidgetIDs) ?? [])
+        topLayout = defaults.string(forKey: Keys.topLayout).flatMap(SidebarLayout.init(rawValue:)) ?? .grid
+        bottomLayout = defaults.string(forKey: Keys.bottomLayout).flatMap(SidebarLayout.init(rawValue:)) ?? .list
         showsBottomSwitcher = defaults.object(forKey: Keys.showsBottomSwitcher) as? Bool ?? true
         expandedAppIdentifiers = Set(defaults.stringArray(forKey: Keys.expandedApps) ?? [])
         openFolderIdentifier = defaults.string(forKey: Keys.openFolder)
@@ -524,4 +580,23 @@ struct SidebarPinnedSite: Codable, Equatable, Identifiable {
         guard let host = url.host?.lowercased() else { return nil }
         return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
+}
+
+/// The two places pinned apps, sites and widgets can sit: under the
+/// greeting, or at the foot of the sidebar.
+enum SidebarPlace: String {
+    case top, bottom
+
+    var other: SidebarPlace { self == .top ? .bottom : .top }
+
+    /// The menu item that sends an item to the other place.
+    var moveTitle: String { self == .top ? "Move to Top" : "Move to Bottom" }
+}
+
+/// Tiles across, the way the pinned apps have always been shown, or one
+/// row each, the way the widgets have.
+enum SidebarLayout: String, CaseIterable {
+    case grid, list
+
+    var title: String { self == .grid ? "Grid" : "List" }
 }

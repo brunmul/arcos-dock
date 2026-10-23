@@ -9,17 +9,19 @@
 //                compact toggle and a menu (auto-hide, settings, back to
 //                the dock strip); the greeting moves to a line of its own
 //                under them when the sidebar is too narrow for both
-//    pinned      a group that folds, two small blocks of tiles: the
-//                pinned apps, then the pinned folders and the Trash. A
-//                folder's tile lists its contents underneath
+//    pinned      a group that folds: the pinned apps and sites, and any
+//                widget moved up, as tiles or rows ("…" → Layout); then
+//                the pinned folders and the Trash. A folder's tile lists
+//                its contents underneath
 //    open        two groups that fold, each with a "close all": Apps,
 //                every open app, a row unfolding into the app's windows,
 //                ending with "New Window"; then Web, one row per Chrome
 //                tab (`BrowserTabsService`), which takes Chrome's place
 //                among the apps, ending with "New Tab". Both open a
 //                search (`SidebarSearch.swift`)
-//    widgets     the dock's widgets as rows the size of an app's row;
-//                their detail opens beside the sidebar on hover
+//    widgets     the dock's widgets, and any pinned app or site moved
+//                down, as rows the size of an app's row or as tiles; a
+//                widget's detail opens beside the sidebar on hover
 //                (`SidebarWidgets.swift`)
 //
 //  Compact, the same content becomes a rail of icons, like the collapsed
@@ -99,17 +101,13 @@ struct SidebarView: View {
             }
             .frame(minHeight: 80)
 
-            if !widgets.isEmpty {
+            if !bottomWidgets.isEmpty || !bottomItems.isEmpty {
                 SidebarDivider()
                     .padding(.horizontal, Self.horizontalPadding)
                     .padding(.bottom, 6)
 
-                VStack(spacing: 2) {
-                    ForEach(widgets, id: \.identifier) { widget in
-                        SidebarWidgetItem(widget: widget)
-                    }
-                }
-                .padding(.horizontal, Self.horizontalPadding)
+                SidebarPlaceView(items: bottomItems, widgets: bottomWidgets, layout: sidebar.bottomLayout)
+                    .padding(.horizontal, Self.horizontalPadding)
             }
         }
         .padding(.bottom, 8)
@@ -126,7 +124,7 @@ struct SidebarView: View {
     private var pinnedSection: some View {
         SidebarGroupHeader(
             title: "Pinned",
-            count: pinnedItems.count,
+            count: topItems.count + topWidgets.count,
             isFolded: foldsPinned,
             toggle: { withAnimation(SidebarMetrics.foldAnimation) { foldsPinned.toggle() } }
         )
@@ -138,8 +136,9 @@ struct SidebarView: View {
 
     @ViewBuilder
     private var pinnedTiles: some View {
-        if !pinnedApps.isEmpty || !sidebar.pinnedSites.isEmpty {
-            SidebarFavoritesGrid(items: pinnedItems)
+        let hasTopContent = !topItems.isEmpty || !topWidgets.isEmpty
+        if hasTopContent {
+            SidebarPlaceView(items: topItems, widgets: topWidgets, layout: sidebar.topLayout)
         }
 
         LazyVGrid(columns: SidebarMetrics.tileColumns, spacing: SidebarMetrics.tileSpacing) {
@@ -158,7 +157,7 @@ struct SidebarView: View {
                 SidebarTrashTile()
             }
         }
-        .padding(.top, pinnedApps.isEmpty && sidebar.pinnedSites.isEmpty ? 0 : 7)
+        .padding(.top, hasTopContent ? 7 : 0)
 
         if let openFolder {
             SidebarFolderContents(folder: openFolder) {
@@ -317,6 +316,25 @@ struct SidebarView: View {
     /// the dock's widgets minus those unticked in "…" → Widgets.
     private var widgets: [WidgetTile] {
         SidebarPreferences.allWidgets(in: tileStore).filter { sidebar.shows(widget: $0) }
+    }
+
+    /// The pinned apps and sites, and the widgets, split between the top
+    /// of the full sidebar and its foot (`SidebarPreferences.bottomItemIDs`,
+    /// `topWidgetIDs`). The rail and the bottom bar show them all as before.
+    private var topItems: [SidebarPinnedItem] {
+        pinnedItems.filter { sidebar.place(ofItem: $0.id) == .top }
+    }
+
+    private var bottomItems: [SidebarPinnedItem] {
+        pinnedItems.filter { sidebar.place(ofItem: $0.id) == .bottom }
+    }
+
+    private var topWidgets: [WidgetTile] {
+        widgets.filter { sidebar.place(of: $0) == .top }
+    }
+
+    private var bottomWidgets: [WidgetTile] {
+        widgets.filter { sidebar.place(of: $0) == .bottom }
     }
 
     /// Docky's app folders and the Finder folders, in dock order.
@@ -608,6 +626,16 @@ private struct SidebarOptionsMenu: View {
                 .labelsHidden()
             }
             Toggle("Match Wallpaper to Theme", isOn: $sidebar.matchesWallpaper)
+            Menu("Layout") {
+                Picker("Top", selection: $sidebar.topLayout) {
+                    ForEach(SidebarLayout.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.inline)
+                Picker("Bottom", selection: $sidebar.bottomLayout) {
+                    ForEach(SidebarLayout.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.inline)
+            }
             Menu("Widgets") {
                 ForEach(SidebarPreferences.allWidgets(in: TileStore.shared), id: \.identifier) { widget in
                     Toggle(widget.title, isOn: Binding(
