@@ -205,7 +205,7 @@ func sidebarItemIconActions(forItem id: String) -> [ContextAction] {
     func iconAction(_ name: String) -> ContextAction {
         .action(
             NotionIconPack.title(of: name),
-            image: NotionIconPack.image(named: name),
+            image: NotionIconPack.coloredImage(named: name, theme: preferences.theme),
             isOn: preferences.wornIcon(forItem: id)?.name == name
         ) {
             preferences.setIcon(name, forItem: id)
@@ -223,7 +223,7 @@ func sidebarItemIconActions(forItem id: String) -> [ContextAction] {
             let holdsCurrent = current.map { group.names.contains($0.name) } ?? false
             return .lazySubmenu(
                 group.initial,
-                image: holdsCurrent ? current.flatMap { NotionIconPack.image(named: $0.name) } : nil
+                image: holdsCurrent ? current.flatMap { NotionIconPack.coloredImage(named: $0.name, theme: preferences.theme) } : nil
             ) { group.names.map(iconAction) }
         }
         if !NotionIconPack.interfaceNames.isEmpty {
@@ -233,31 +233,28 @@ func sidebarItemIconActions(forItem id: String) -> [ContextAction] {
     }]
 }
 
-/// A Notion icon worn by a pinned app or site: the filled glyph in the
-/// theme's ink on a faint wash of it, so it follows the sidebar's colors.
+/// A Notion icon worn by a pinned app or site: the filled glyph alone, at
+/// the icon's full size, in a color drawn from the sidebar's theme.
 struct SidebarItemIconView: View {
     let icon: SidebarItemIcon
     let size: CGFloat
 
+    @ObservedObject private var sidebar = SidebarPreferences.shared
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        // Full-strength ink: the theme's text color reads on every theme,
-        // where a faded one got lost on the colored ones.
-        let tint = Color.primary
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-                .fill(Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.09))
+        Group {
             if let image = NotionIconPack.image(named: icon.name) {
                 Image(nsImage: image)
                     .renderingMode(.template)
                     .resizable()
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
-                    .foregroundStyle(tint)
-                    // A filled glyph weighs more than a line one: a little
-                    // more air around it on its tile.
-                    .padding(size * 0.16)
+                    .foregroundStyle(Color(nsColor: NotionIconPack.color(
+                        forIcon: icon.name,
+                        theme: sidebar.theme,
+                        isDark: colorScheme == .dark
+                    )))
             }
         }
         .frame(width: size, height: size)

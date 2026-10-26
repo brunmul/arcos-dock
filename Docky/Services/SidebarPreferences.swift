@@ -511,12 +511,16 @@ struct SidebarFolderGlyph: Codable, Equatable {
         /// tiles sit next to app icons all day and should not shout. Each
         /// is a little lighter on a dark sidebar so the line stays legible.
         var nsColor: NSColor {
+            NSColor(name: nil) { appearance in
+                ink(isDark: appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua)
+            }
+        }
+
+        /// The ink on a light or a dark sidebar.
+        func ink(isDark: Bool) -> NSColor {
             let (red, green, blue) = components
             let light = NSColor(srgbRed: red, green: green, blue: blue, alpha: 1)
-            let dark = light.blended(withFraction: 0.42, of: .white) ?? light
-            return NSColor(name: nil) { appearance in
-                appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
-            }
+            return isDark ? (light.blended(withFraction: 0.42, of: .white) ?? light) : light
         }
 
         private var components: (CGFloat, CGFloat, CGFloat) {

@@ -72,6 +72,86 @@ enum NotionIconPack {
         return image
     }
 
+    /// The color a Notion icon wears, drawn from the sidebar's theme so the
+    /// icons are colored yet belong to the bar (Bruno, 26 October). Each
+    /// icon keeps the same color for its name, by the same rule as Docky
+    /// for Windows (`Palette.IconColor`):
+    /// - Claude theme, or a theme with almost no color (Gray, Hoth...): the
+    ///   folders' muted inks, without the gray;
+    /// - any other theme: six hues 60° apart, starting from the hue of the
+    ///   theme's more colorful end, saturation 55 %, lightness 40 % on a
+    ///   light bar and 72 % on a dark one.
+    static func color(forIcon name: String, theme: SidebarTheme, isDark: Bool) -> NSColor {
+        var hash: UInt32 = 2166136261
+        for byte in name.utf8 {
+            hash = (hash ^ UInt32(byte)) &* 16777619
+        }
+        let (topHue, topSaturation) = hueAndSaturation(of: theme.top)
+        let (bottomHue, bottomSaturation) = hueAndSaturation(of: theme.bottom)
+        if theme.isClaude || max(topSaturation, bottomSaturation) < 0.15 {
+            let tints = SidebarFolderGlyph.Tint.allCases.filter { $0 != .gray }
+            return tints[Int(hash % UInt32(tints.count))].ink(isDark: isDark)
+        }
+        let hue = (topSaturation >= bottomSaturation ? topHue : bottomHue) + 60 * Double(hash % 6)
+        return color(hue: hue.truncatingRemainder(dividingBy: 360), saturation: 0.55, lightness: isDark ? 0.72 : 0.40)
+    }
+
+    /// Whether the sidebar is dark: the system's mode with the Claude
+    /// theme, the theme's own otherwise. For the menus, drawn outside the
+    /// sidebar's SwiftUI environment.
+    static func sidebarIsDark(_ theme: SidebarTheme) -> Bool {
+        theme.isClaude
+            ? NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            : theme.isDark
+    }
+
+    /// The icon filled with its color, for the menus.
+    static func coloredImage(named name: String, theme: SidebarTheme) -> NSImage? {
+        guard let template = image(named: name) else { return nil }
+        let ink = color(forIcon: name, theme: theme, isDark: sidebarIsDark(theme))
+        return NSImage(size: template.size, flipped: false) { rect in
+            template.draw(in: rect)
+            ink.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+    }
+
+    /// Hue in degrees and HSL saturation of a 0xRRGGBB color.
+    private static func hueAndSaturation(of hex: Int) -> (Double, Double) {
+        let r = Double((hex >> 16) & 0xFF) / 255, g = Double((hex >> 8) & 0xFF) / 255, b = Double(hex & 0xFF) / 255
+        let high = max(r, g, b), low = min(r, g, b), delta = high - low
+        guard delta > 1e-6 else { return (0, 0) }
+        let lightness = (high + low) / 2
+        let saturation = delta / (1 - abs(2 * lightness - 1))
+        let hue: Double
+        if high == r {
+            hue = 60 * ((g - b) / delta).truncatingRemainder(dividingBy: 6)
+        } else if high == g {
+            hue = 60 * ((b - r) / delta + 2)
+        } else {
+            hue = 60 * ((r - g) / delta + 4)
+        }
+        return ((hue + 360).truncatingRemainder(dividingBy: 360), saturation)
+    }
+
+    private static func color(hue: Double, saturation: Double, lightness: Double) -> NSColor {
+        let c = (1 - abs(2 * lightness - 1)) * saturation
+        let x = c * (1 - abs((hue / 60).truncatingRemainder(dividingBy: 2) - 1))
+        let m = lightness - c / 2
+        let (r, g, b): (Double, Double, Double) = switch hue {
+        case ..<60: (c, x, 0)
+        case ..<120: (x, c, 0)
+        case ..<180: (0, c, x)
+        case ..<240: (0, x, c)
+        case ..<300: (x, 0, c)
+        default: (c, 0, x)
+        }
+        // Rounded to bytes, as on Windows, so both draw the same color.
+        func byte(_ v: Double) -> CGFloat { CGFloat((v + m) * 255).rounded() / 255 }
+        return NSColor(srgbRed: byte(r), green: byte(g), blue: byte(b), alpha: 1)
+    }
+
     /// "alarm-clock" -> "Alarm Clock", for the menus.
     static func title(of name: String) -> String {
         name.split(separator: "-").map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ")
