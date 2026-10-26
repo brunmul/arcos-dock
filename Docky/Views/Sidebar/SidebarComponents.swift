@@ -59,7 +59,7 @@ struct SidebarAppIcon: View {
     private static let ink = Color.primary.opacity(0.74)
 
     var body: some View {
-        if let custom = sidebar.itemIcons["app-\(bundleIdentifier)"] {
+        if let custom = sidebar.wornIcon(forItem: "app-\(bundleIdentifier)") {
             SidebarItemIconView(icon: custom, size: size)
         } else if let packIcon = iconPack.icon(forBundleIdentifier: bundleIdentifier) {
             SidebarPackIconView(icon: packIcon, ink: Self.ink)
@@ -195,27 +195,45 @@ func sidebarMoveAction(forItem id: String) -> ContextAction {
     }
 }
 
-/// "Icon" for a pinned app or site: an icon from the Claude pack in place
+/// "Icon" for a pinned app or site: an icon from the Notion pack in place
 /// of its own, drawn in the theme's colors; "Default" gives it back its
-/// own icon.
+/// own icon. The ~900 page icons come by first letter, the interface ones
+/// apart, so no menu runs off the screen.
 func sidebarItemIconActions(forItem id: String) -> [ContextAction] {
     let preferences = SidebarPreferences.shared
-    let current = preferences.itemIcons[id]
 
-    var iconActions: [ContextAction] = [
-        .action("Default", isOn: current == nil) { preferences.setIcon(nil, forItem: id) },
-        .divider
-    ]
-    iconActions += ClaudeIconPack.names.map { name in
-        .action(ClaudeIconPack.title(of: name), image: ClaudeIconPack.image(named: name), isOn: current?.name == name) {
+    func iconAction(_ name: String) -> ContextAction {
+        .action(
+            NotionIconPack.title(of: name),
+            image: NotionIconPack.image(named: name),
+            isOn: preferences.wornIcon(forItem: id)?.name == name
+        ) {
             preferences.setIcon(name, forItem: id)
         }
     }
 
-    return [.lazySubmenu("Icon") { iconActions }]
+    return [.lazySubmenu("Icon") {
+        let current = preferences.wornIcon(forItem: id)
+        var actions: [ContextAction] = [
+            .action("Default", isOn: current == nil) { preferences.setIcon(nil, forItem: id) },
+            .divider
+        ]
+        actions += NotionIconPack.pageNamesByInitial.map { group in
+            // The letter holding the current icon shows it, to find it again.
+            let holdsCurrent = current.map { group.names.contains($0.name) } ?? false
+            return .lazySubmenu(
+                group.initial,
+                image: holdsCurrent ? current.flatMap { NotionIconPack.image(named: $0.name) } : nil
+            ) { group.names.map(iconAction) }
+        }
+        if !NotionIconPack.interfaceNames.isEmpty {
+            actions += [.divider, .lazySubmenu("Interface") { NotionIconPack.interfaceNames.map(iconAction) }]
+        }
+        return actions
+    }]
 }
 
-/// A Claude icon worn by a pinned app or site: the line drawing in the
+/// A Notion icon worn by a pinned app or site: the filled glyph in the
 /// theme's ink on a faint wash of it, so it follows the sidebar's colors.
 struct SidebarItemIconView: View {
     let icon: SidebarItemIcon
@@ -230,14 +248,16 @@ struct SidebarItemIconView: View {
         ZStack {
             RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
                 .fill(Color.primary.opacity(colorScheme == .dark ? 0.14 : 0.09))
-            if let image = ClaudeIconPack.image(named: icon.name) {
+            if let image = NotionIconPack.image(named: icon.name) {
                 Image(nsImage: image)
                     .renderingMode(.template)
                     .resizable()
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
                     .foregroundStyle(tint)
-                    .padding(size * 0.1)
+                    // A filled glyph weighs more than a line one: a little
+                    // more air around it on its tile.
+                    .padding(size * 0.16)
             }
         }
         .frame(width: size, height: size)
@@ -471,7 +491,7 @@ struct SidebarPinnedItemRow: View {
         case .app(let app):
             SidebarAppIcon(bundleIdentifier: app.bundleIdentifier, size: SidebarMetrics.rowIconSize)
         case .site(let site):
-            if let custom = SidebarPreferences.shared.itemIcons[item.id] {
+            if let custom = SidebarPreferences.shared.wornIcon(forItem: item.id) {
                 SidebarItemIconView(icon: custom, size: SidebarMetrics.rowIconSize)
             } else {
                 SidebarWebIcon(url: browserTabs.tab(for: site)?.url ?? site.url, size: SidebarMetrics.rowIconSize)
@@ -794,7 +814,7 @@ struct SidebarSiteTile: View {
 
     @ViewBuilder
     private var icon: some View {
-        if let custom = SidebarPreferences.shared.itemIcons[SidebarPinnedItem.site(site).id] {
+        if let custom = SidebarPreferences.shared.wornIcon(forItem: SidebarPinnedItem.site(site).id) {
             SidebarItemIconView(icon: custom, size: SidebarMetrics.tileIconSize)
         } else {
             SidebarWebIcon(url: openTab?.url ?? site.url, size: SidebarMetrics.tileIconSize)

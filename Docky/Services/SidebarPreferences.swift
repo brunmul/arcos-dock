@@ -122,8 +122,9 @@ final class SidebarPreferences: ObservableObject {
 
     // MARK: Custom icons
 
-    /// Icons from the Claude pack worn by pinned apps and sites, by
-    /// `SidebarPinnedItem.id`.
+    /// Icons from the Notion pack chosen for pinned apps and sites, by
+    /// `SidebarPinnedItem.id`. A name the pack doesn't have (a Claude icon
+    /// chosen before the switch) is kept but not worn: see `wornIcon`.
     @Published var itemIcons: [String: SidebarItemIcon] {
         didSet {
             if let data = try? JSONEncoder().encode(itemIcons) {
@@ -138,6 +139,13 @@ final class SidebarPreferences: ObservableObject {
             return
         }
         itemIcons[id] = SidebarItemIcon(name: name)
+    }
+
+    /// The icon an item wears, if the Notion pack can draw it; nil gives
+    /// the item its own icon back.
+    func wornIcon(forItem id: String) -> SidebarItemIcon? {
+        guard let icon = itemIcons[id], NotionIconPack.image(named: icon.name) != nil else { return nil }
+        return icon
     }
 
     // MARK: Top and bottom
@@ -658,7 +666,7 @@ enum SidebarLayout: String, CaseIterable {
     var title: String { self == .grid ? "Grid" : "List" }
 }
 
-/// An icon from the Claude pack (`ClaudeIconPack`) chosen for a pinned app
+/// An icon from the Notion pack (`NotionIconPack`) chosen for a pinned app
 /// or site, drawn in the theme's colors.
 struct SidebarItemIcon: Codable, Equatable {
     var name: String
