@@ -258,10 +258,10 @@ private func sidebarSwatch(_ color: NSColor) -> NSImage? {
         .withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [color]))
 }
 
-/// A Notion icon worn by a pinned app or site, in the manner of Claude's
-/// (Bruno, 27 October): the glyph in its color on a rounded cartouche
-/// washed with the same color, a little stronger on a dark bar. The color
-/// is the one chosen by hand, or drawn from the sidebar's theme.
+/// A Notion icon worn by a pinned app or site: the glyph alone, bare, at
+/// the icon's full size, in the color chosen by hand or drawn from the
+/// sidebar's theme. On a tile, the tile itself is its cartouche
+/// (`SidebarItemBackground.notionIcon`).
 struct SidebarItemIconView: View {
     let icon: SidebarItemIcon
     let size: CGFloat
@@ -270,25 +270,19 @@ struct SidebarItemIconView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let isDark = colorScheme == .dark
-        let ink = Color(nsColor: NotionIconPack.color(
-            forIcon: icon.name,
-            tint: icon.tint,
-            theme: sidebar.theme,
-            isDark: isDark
-        ))
-        ZStack {
-            // 0x2A and 0x40 of 255, as on Windows.
-            RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
-                .fill(ink.opacity(isDark ? 0x40 / 255.0 : 0x2A / 255.0))
+        Group {
             if let image = NotionIconPack.image(named: icon.name) {
                 Image(nsImage: image)
                     .renderingMode(.template)
                     .resizable()
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
-                    .foregroundStyle(ink)
-                    .frame(width: size * 0.64, height: size * 0.64)
+                    .foregroundStyle(Color(nsColor: NotionIconPack.color(
+                        forIcon: icon.name,
+                        tint: icon.tint,
+                        theme: sidebar.theme,
+                        isDark: colorScheme == .dark
+                    )))
             }
         }
         .frame(width: size, height: size)
@@ -401,16 +395,32 @@ struct SidebarItemBackground: View {
     let isCurrent: Bool
     var restingOpacity: Double = 0
     var cornerRadius: CGFloat = 7
+    /// The Notion icon a pinned item's tile wears: the tile itself becomes
+    /// its cartouche, washed with the icon's color (Bruno, 27 October).
+    var notionIcon: SidebarItemIcon? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(fill)
-            .shadow(color: .black.opacity(isCurrent ? 0.1 : 0), radius: 1.5, x: 0, y: 0.5)
+            .shadow(color: .black.opacity(isCurrent && notionIcon == nil ? 0.1 : 0), radius: 1.5, x: 0, y: 0.5)
     }
 
     private var fill: Color {
+        if let notionIcon {
+            // As on Windows: 0x2A of 255 on a light bar, 0x40 on a dark
+            // one, 0x16 more under the pointer, 0x30 more in front.
+            let isDark = colorScheme == .dark
+            let ink = NotionIconPack.color(
+                forIcon: notionIcon.name,
+                tint: notionIcon.tint,
+                theme: SidebarPreferences.shared.theme,
+                isDark: isDark
+            )
+            let extra = isCurrent ? 0x30 : (isHovered ? 0x16 : 0)
+            return Color(nsColor: ink).opacity(Double(min((isDark ? 0x40 : 0x2A) + extra, 255)) / 255)
+        }
         if isCurrent {
             return Color.white.opacity(colorScheme == .dark ? 0.18 : 0.78)
         }
@@ -431,17 +441,6 @@ enum SidebarPinnedItem: Identifiable {
         case .app(let app): "app-\(app.bundleIdentifier)"
         case .site(let site): "site-\(site.id)"
         }
-    }
-}
-
-/// The mark under an open pinned item's icon, on its tile.
-struct SidebarOpenDot: View {
-    var body: some View {
-        Circle()
-            .fill(Color.primary.opacity(0.45))
-            .frame(width: 3, height: 3)
-            .padding(.bottom, 3)
-            .allowsHitTesting(false)
     }
 }
 
@@ -780,6 +779,7 @@ struct SidebarSiteTile: View {
     @ObservedObject private var workspace = WorkspaceService.shared
     @ObservedObject private var browserTabs = BrowserTabsService.shared
     @ObservedObject private var favicons = SidebarFaviconStore.shared
+    @ObservedObject private var sidebar = SidebarPreferences.shared
     @State private var isHovered = false
 
     private static let ink = Color.primary.opacity(0.74)
@@ -809,19 +809,17 @@ struct SidebarSiteTile: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: SidebarMetrics.tileHeight)
                 // Every tile alike, the way Arc draws its favorites: the
-                // one in front raised in white, an open one marked by a
-                // small dot under its icon, nothing greyed out.
+                // one in front raised, nothing greyed out, and no dot for
+                // an open one: a pinned item on the bar is an open one,
+                // the closed ones wait behind "+N" (Bruno, 27 October).
+                // A tile wearing a Notion icon is washed with its color.
                 .background(SidebarItemBackground(
                     isHovered: isHovered,
                     isCurrent: isCurrent,
                     restingOpacity: 0.07,
-                    cornerRadius: SidebarMetrics.tileCornerRadius
+                    cornerRadius: SidebarMetrics.tileCornerRadius,
+                    notionIcon: sidebar.wornIcon(forItem: SidebarPinnedItem.site(site).id)
                 ))
-                .overlay(alignment: .bottom) {
-                    if openTab != nil && !isCurrent {
-                        SidebarOpenDot()
-                    }
-                }
                 .overlay(alignment: .topTrailing) {
                     if hasBadge {
                         Circle()
@@ -861,11 +859,8 @@ struct SidebarAppTile: View {
     @ObservedObject private var workspace = WorkspaceService.shared
     @ObservedObject private var badges = DockBadgeService.shared
     @Bindable private var preferences = DockyPreferences.shared
+    @ObservedObject private var sidebar = SidebarPreferences.shared
     @State private var isHovered = false
-
-    private var isRunning: Bool {
-        workspace.isRunning(bundleIdentifier: app.bundleIdentifier)
-    }
 
     private var isFrontmost: Bool {
         workspace.frontmostBundleIdentifier == app.bundleIdentifier
@@ -883,19 +878,17 @@ struct SidebarAppTile: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: SidebarMetrics.tileHeight)
                 // Every tile alike, the way Arc draws its favorites: the
-                // one in front raised in white, an open one marked by a
-                // small dot under its icon, nothing greyed out.
+                // one in front raised, nothing greyed out, and no dot for
+                // an open one: a pinned item on the bar is an open one,
+                // the closed ones wait behind "+N" (Bruno, 27 October).
+                // A tile wearing a Notion icon is washed with its color.
                 .background(SidebarItemBackground(
                     isHovered: isHovered,
                     isCurrent: isFrontmost,
                     restingOpacity: 0.07,
-                    cornerRadius: SidebarMetrics.tileCornerRadius
+                    cornerRadius: SidebarMetrics.tileCornerRadius,
+                    notionIcon: sidebar.wornIcon(forItem: SidebarPinnedItem.app(app).id)
                 ))
-                .overlay(alignment: .bottom) {
-                    if isRunning && !isFrontmost {
-                        SidebarOpenDot()
-                    }
-                }
                 .overlay(alignment: .topTrailing) {
                     if hasBadge {
                         Circle()
