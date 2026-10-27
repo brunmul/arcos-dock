@@ -260,10 +260,14 @@ private func sidebarSwatch(_ color: NSColor) -> NSImage? {
         .withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [color]))
 }
 
-/// A Notion icon worn by a pinned app or site: the glyph alone, bare, at
-/// the icon's full size, in the color chosen by hand or drawn from the
-/// sidebar's theme. On a tile, the tile itself is its cartouche
-/// (`SidebarItemBackground.notionIcon`).
+/// A Notion icon worn by a pinned app or site, in relief as in Bruno's
+/// mockup (27 October), like Windows' `NotionIcons.Embossed`: the glyph
+/// filled with a vertical gradient from its color lifted 6.4 % toward
+/// white at the top to 9.6 % toward black at the bottom, over a white copy
+/// half a point higher (60 % opaque, 21 % on a dark bar), like a stamp lit
+/// from above. No drop shadow, no bevel. The color is the one chosen by
+/// hand, or drawn from the sidebar's theme; on a tile, the tile itself is
+/// its cartouche (`SidebarTintedTileWash`).
 struct SidebarItemIconView: View {
     let icon: SidebarItemIcon
     let size: CGFloat
@@ -272,22 +276,34 @@ struct SidebarItemIconView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        Group {
+        let isDark = colorScheme == .dark
+        let ink = NotionIconPack.color(forIcon: icon.name, tint: icon.tint, theme: sidebar.theme, isDark: isDark)
+        ZStack {
             if let image = NotionIconPack.image(named: icon.name) {
-                Image(nsImage: image)
-                    .renderingMode(.template)
-                    .resizable()
-                    .interpolation(.high)
-                    .aspectRatio(contentMode: .fit)
-                    .foregroundStyle(Color(nsColor: NotionIconPack.color(
-                        forIcon: icon.name,
-                        tint: icon.tint,
-                        theme: sidebar.theme,
-                        isDark: colorScheme == .dark
-                    )))
+                glyph(image)
+                    .foregroundStyle(Color.white)
+                    .opacity(isDark ? 0.21 : 0.60)
+                    .offset(y: -0.5)
+                glyph(image)
+                    .foregroundStyle(LinearGradient(
+                        colors: [
+                            Color(nsColor: NotionIconPack.mix(ink, .white, 0.064)),
+                            Color(nsColor: NotionIconPack.mix(ink, .black, 0.096))
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ))
             }
         }
         .frame(width: size, height: size)
+    }
+
+    private func glyph(_ image: NSImage) -> some View {
+        Image(nsImage: image)
+            .renderingMode(.template)
+            .resizable()
+            .interpolation(.high)
+            .aspectRatio(contentMode: .fit)
     }
 }
 
@@ -404,32 +420,64 @@ struct SidebarItemBackground: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(fill)
-            .shadow(color: .black.opacity(isCurrent ? 0.1 : 0), radius: 1.5, x: 0, y: 0.5)
-    }
-
-    private var fill: Color {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         // The one in front wears the usual white pill, Notion icon or not,
         // so the selection reads the same everywhere (Bruno, 27 October).
         if let notionIcon, !isCurrent {
-            // As on Windows, a light wash (halved, Bruno, 27 October):
-            // 0x14 of 255 on a light bar, 0x22 on a dark one, 0x0C more
-            // under the pointer.
-            let isDark = colorScheme == .dark
-            let ink = NotionIconPack.color(
-                forIcon: notionIcon.name,
-                tint: notionIcon.tint,
-                theme: SidebarPreferences.shared.theme,
-                isDark: isDark
-            )
-            let extra = isHovered ? 0x0C : 0
-            return Color(nsColor: ink).opacity(Double(min((isDark ? 0x22 : 0x14) + extra, 255)) / 255)
+            SidebarTintedTileWash(icon: notionIcon, isHovered: isHovered)
+                .clipShape(shape)
+        } else {
+            shape
+                .fill(fill)
+                .shadow(color: .black.opacity(isCurrent ? 0.1 : 0), radius: 1.5, x: 0, y: 0.5)
         }
+    }
+
+    private var fill: Color {
         if isCurrent {
             return Color.white.opacity(colorScheme == .dark ? 0.18 : 0.78)
         }
         return Color.primary.opacity(isHovered ? restingOpacity + 0.06 : restingOpacity)
+    }
+}
+
+/// The tile of a pinned item wearing a Notion icon, as in Bruno's relief
+/// mockup (27 October), like Windows' `PinnedArea.Wash`: flat, a radial
+/// gradient from the icon's color mixed 30 % into the bar at the center to
+/// 4 % at the edge, over an ellipse 80 % of the width by 100 % of the
+/// height; ×1.06 brighter under the pointer. No shadow, line or gloss.
+struct SidebarTintedTileWash: View {
+    let icon: SidebarItemIcon
+    let isHovered: Bool
+
+    @ObservedObject private var sidebar = SidebarPreferences.shared
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let isDark = colorScheme == .dark
+        let ink = NotionIconPack.color(forIcon: icon.name, tint: icon.tint, theme: sidebar.theme, isDark: isDark)
+        let bar = NotionIconPack.barColor(theme: sidebar.theme, isDark: isDark)
+        let factor = isHovered ? 1.06 : 1
+        let center = Color(nsColor: NotionIconPack.brightened(NotionIconPack.mix(bar, ink, 0.30), by: factor))
+        let edge = Color(nsColor: NotionIconPack.brightened(NotionIconPack.mix(bar, ink, 0.04), by: factor))
+        Canvas { context, size in
+            let radiusX = size.width * 0.8
+            let radiusY = size.height * 1.0
+            guard radiusX > 0, radiusY > 0 else { return }
+            // A circle of radius X, squashed to the ellipse about the center.
+            context.translateBy(x: size.width / 2, y: size.height / 2)
+            context.scaleBy(x: 1, y: radiusY / radiusX)
+            let reach = max(size.width, size.height) * 2
+            context.fill(
+                Path(CGRect(x: -reach, y: -reach, width: reach * 2, height: reach * 2)),
+                with: .radialGradient(
+                    Gradient(colors: [center, edge]),
+                    center: .zero,
+                    startRadius: 0,
+                    endRadius: radiusX
+                )
+            )
+        }
     }
 }
 

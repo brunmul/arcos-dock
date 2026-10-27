@@ -121,6 +121,44 @@ enum NotionIconPack {
         }
     }
 
+    /// a + (b − a)·t, channel by channel in sRGB, rounded to bytes as on
+    /// Windows (`Palette.Mix`).
+    static func mix(_ a: NSColor, _ b: NSColor, _ t: Double) -> NSColor {
+        let a = bytes(of: a), b = bytes(of: b)
+        func m(_ x: Double, _ y: Double) -> CGFloat { CGFloat((x + (y - x) * t).rounded()) / 255 }
+        return NSColor(srgbRed: m(a.0, b.0), green: m(a.1, b.1), blue: m(a.2, b.2), alpha: 1)
+    }
+
+    /// Each channel times `factor`, capped at white: the hover's lift.
+    static func brightened(_ color: NSColor, by factor: Double) -> NSColor {
+        let c = bytes(of: color)
+        func s(_ v: Double) -> CGFloat { CGFloat(min(255, (v * factor).rounded())) / 255 }
+        return NSColor(srgbRed: s(c.0), green: s(c.1), blue: s(c.2), alpha: 1)
+    }
+
+    /// The bar's own color under a tile: the Claude paper or charcoal, or a
+    /// theme's gradient taken 40 % of the way down (`Palette.BarColor`).
+    static func barColor(theme: SidebarTheme, isDark: Bool) -> NSColor {
+        if theme.isClaude {
+            return isDark ? hexColor(0x1F1E1D) : hexColor(0xF5F4ED)
+        }
+        return mix(hexColor(theme.top), hexColor(theme.bottom), 0.4)
+    }
+
+    private static func hexColor(_ hex: Int) -> NSColor {
+        NSColor(
+            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: 1
+        )
+    }
+
+    private static func bytes(of color: NSColor) -> (Double, Double, Double) {
+        let c = color.usingColorSpace(.sRGB) ?? color
+        return ((c.redComponent * 255).rounded(), (c.greenComponent * 255).rounded(), (c.blueComponent * 255).rounded())
+    }
+
     /// Hue in degrees and HSL saturation of a 0xRRGGBB color.
     private static func hueAndSaturation(of hex: Int) -> (Double, Double) {
         let r = Double((hex >> 16) & 0xFF) / 255, g = Double((hex >> 8) & 0xFF) / 255, b = Double(hex & 0xFF) / 255
