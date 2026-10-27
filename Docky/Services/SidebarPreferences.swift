@@ -144,7 +144,7 @@ final class SidebarPreferences: ObservableObject {
 
     /// The color chosen by hand for an item's icon; nil for the color the
     /// theme gives it (Auto).
-    func setIconTint(_ tint: SidebarFolderGlyph.Tint?, forItem id: String) {
+    func setIconTint(_ tint: SidebarIconTint?, forItem id: String) {
         guard var icon = itemIcons[id] else { return }
         icon.tint = tint
         itemIcons[id] = icon
@@ -683,7 +683,65 @@ enum SidebarLayout: String, CaseIterable {
 /// or site, drawn in the theme's colors.
 struct SidebarItemIcon: Codable, Equatable {
     var name: String
-    /// The folders' tint chosen for it, or nil for the color the theme
-    /// gives it (`NotionIconPack.color`).
-    var tint: SidebarFolderGlyph.Tint? = nil
+    /// The color chosen for it, or nil for the color the theme gives it
+    /// (`NotionIconPack.color`).
+    var tint: SidebarIconTint? = nil
+}
+
+/// The colors a pinned item's Notion icon can be given by hand: the
+/// folders' nine muted tints, then nine vivid ones (Bruno, 27 October),
+/// with the same ids and values as Docky for Windows (`Palette.VividTints`).
+/// Saved by id, so icons tinted before the vivid ones came read unchanged.
+enum SidebarIconTint: String, Codable, CaseIterable, Identifiable {
+    case gray, blue, purple, pink, red, orange, yellow, green, teal
+    case vividRed = "vivid-red"
+    case vividOrange = "vivid-orange"
+    case vividYellow = "vivid-yellow"
+    case vividGreen = "vivid-green"
+    case vividTeal = "vivid-teal"
+    case vividBlue = "vivid-blue"
+    case vividIndigo = "vivid-indigo"
+    case vividViolet = "vivid-violet"
+    case vividPink = "vivid-pink"
+
+    var id: String { rawValue }
+
+    /// The folders' tint of the same id, for the muted ones.
+    var folderTint: SidebarFolderGlyph.Tint? {
+        SidebarFolderGlyph.Tint(rawValue: rawValue)
+    }
+
+    var isVivid: Bool { folderTint == nil }
+
+    var title: String {
+        if let folderTint { return folderTint.title }
+        return "Bright " + rawValue.dropFirst("vivid-".count).capitalized
+    }
+
+    private var vividHex: Int {
+        switch self {
+        case .vividRed: 0xE5484D
+        case .vividOrange: 0xF76B15
+        case .vividYellow: 0xE2A500
+        case .vividGreen: 0x30A46C
+        case .vividTeal: 0x12A594
+        case .vividBlue: 0x0090FF
+        case .vividIndigo: 0x3E63DD
+        case .vividViolet: 0x8E4EC6
+        case .vividPink: 0xD6409F
+        default: 0
+        }
+    }
+
+    /// The ink on a light or a dark sidebar: a folder's as the folders
+    /// draw it; a vivid one as is, or lifted 25 % toward white on a dark
+    /// bar (rounded down to bytes, as on Windows).
+    func ink(isDark: Bool) -> NSColor {
+        if let folderTint { return folderTint.ink(isDark: isDark) }
+        func channel(_ shift: Int) -> CGFloat {
+            let value = Double((vividHex >> shift) & 0xFF)
+            return CGFloat(isDark ? (value + (255 - value) * 0.25).rounded(.down) : value) / 255
+        }
+        return NSColor(srgbRed: channel(16), green: channel(8), blue: channel(0), alpha: 1)
+    }
 }

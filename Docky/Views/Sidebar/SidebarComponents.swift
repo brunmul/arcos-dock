@@ -224,10 +224,12 @@ func sidebarItemIconActions(forItem id: String) -> [ContextAction] {
             actions += [.action("Auto", image: sidebarSwatch(auto), isOn: current.tint == nil) {
                 preferences.setIconTint(nil, forItem: id)
             }]
-            actions += SidebarFolderGlyph.Tint.allCases.map { tint in
-                .action(tint.title, image: sidebarSwatch(tint.ink(isDark: isDark)), isOn: current.tint == tint) {
+            // The folders' muted tints, then the vivid ones.
+            for tint in SidebarIconTint.allCases {
+                if tint == .vividRed { actions += [.divider] }
+                actions += [.action(tint.title, image: sidebarSwatch(tint.ink(isDark: isDark)), isOn: current.tint == tint) {
                     preferences.setIconTint(tint, forItem: id)
-                }
+                }]
             }
             actions += [.divider]
         }
@@ -447,6 +449,18 @@ enum SidebarPinnedItem: Identifiable {
     }
 }
 
+/// What tells a pinned site from a pinned app: a small outlined globe, in
+/// the tertiary gray. Apps have no mark.
+struct SidebarSiteMark: View {
+    var body: some View {
+        Image(systemName: "globe")
+            .font(.system(size: 8, weight: .regular))
+            .foregroundStyle(.tertiary)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
 /// A pinned app or site as a row, for a place set to List: its icon and
 /// its name, like an open app's row.
 struct SidebarPinnedItemRow: View {
@@ -493,6 +507,10 @@ struct SidebarPinnedItemRow: View {
                 .truncationMode(.tail)
 
             Spacer(minLength: 0)
+
+            if case .site = item {
+                SidebarSiteMark()
+            }
         }
         .padding(.leading, SidebarMetrics.rowPadding)
         .padding(.trailing, 5)
@@ -823,6 +841,12 @@ struct SidebarSiteTile: View {
                     cornerRadius: SidebarMetrics.tileCornerRadius,
                     notionIcon: sidebar.wornIcon(forItem: SidebarPinnedItem.site(site).id)
                 ))
+                // A site, not an app: a small globe in the top left corner,
+                // clear of the unread dot, the number and an account photo.
+                .overlay(alignment: .topLeading) {
+                    SidebarSiteMark()
+                        .padding(3)
+                }
                 .overlay(alignment: .topTrailing) {
                     if hasBadge {
                         Circle()
