@@ -81,7 +81,11 @@ enum NotionIconPack {
     /// - any other theme: six hues 60° apart, starting from the hue of the
     ///   theme's more colorful end, saturation 55 %, lightness 40 % on a
     ///   light bar and 72 % on a dark one.
-    static func color(forIcon name: String, theme: SidebarTheme, isDark: Bool) -> NSColor {
+    /// `tint`, when set, is the color chosen by hand: that folder ink.
+    static func color(forIcon name: String, tint: SidebarFolderGlyph.Tint? = nil, theme: SidebarTheme, isDark: Bool) -> NSColor {
+        if let tint {
+            return tint.ink(isDark: isDark)
+        }
         var hash: UInt32 = 2166136261
         for byte in name.utf8 {
             hash = (hash ^ UInt32(byte)) &* 16777619
@@ -106,9 +110,9 @@ enum NotionIconPack {
     }
 
     /// The icon filled with its color, for the menus.
-    static func coloredImage(named name: String, theme: SidebarTheme) -> NSImage? {
+    static func coloredImage(named name: String, tint: SidebarFolderGlyph.Tint? = nil, theme: SidebarTheme) -> NSImage? {
         guard let template = image(named: name) else { return nil }
-        let ink = color(forIcon: name, theme: theme, isDark: sidebarIsDark(theme))
+        let ink = color(forIcon: name, tint: tint, theme: theme, isDark: sidebarIsDark(theme))
         return NSImage(size: template.size, flipped: false) { rect in
             template.draw(in: rect)
             ink.set()

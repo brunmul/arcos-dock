@@ -196,17 +196,18 @@ func sidebarMoveAction(forItem id: String) -> ContextAction {
 }
 
 /// "Icon" for a pinned app or site: an icon from the Notion pack in place
-/// of its own, drawn in the theme's colors; "Default" gives it back its
-/// own icon. The ~900 page icons come by first letter, the interface ones
-/// apart, so no menu runs off the screen.
+/// of its own, in a color drawn from the theme or chosen by hand;
+/// "Default" gives it back its own icon. The ~900 page icons come by first
+/// letter, the interface ones apart, so no menu runs off the screen.
 func sidebarItemIconActions(forItem id: String) -> [ContextAction] {
     let preferences = SidebarPreferences.shared
 
     func iconAction(_ name: String) -> ContextAction {
-        .action(
+        let worn = preferences.wornIcon(forItem: id)
+        return .action(
             NotionIconPack.title(of: name),
-            image: NotionIconPack.coloredImage(named: name, theme: preferences.theme),
-            isOn: preferences.wornIcon(forItem: id)?.name == name
+            image: NotionIconPack.coloredImage(named: name, tint: worn?.tint, theme: preferences.theme),
+            isOn: worn?.name == name
         ) {
             preferences.setIcon(name, forItem: id)
         }
@@ -214,7 +215,23 @@ func sidebarItemIconActions(forItem id: String) -> [ContextAction] {
 
     return [.lazySubmenu("Icon") {
         let current = preferences.wornIcon(forItem: id)
-        var actions: [ContextAction] = [
+        var actions: [ContextAction] = []
+        // The worn icon's color first (Bruno, 27 October): Auto, the color
+        // the theme gives it, or one of the folders' tints.
+        if let current {
+            let isDark = NotionIconPack.sidebarIsDark(preferences.theme)
+            let auto = NotionIconPack.color(forIcon: current.name, theme: preferences.theme, isDark: isDark)
+            actions += [.action("Auto", image: sidebarSwatch(auto), isOn: current.tint == nil) {
+                preferences.setIconTint(nil, forItem: id)
+            }]
+            actions += SidebarFolderGlyph.Tint.allCases.map { tint in
+                .action(tint.title, image: sidebarSwatch(tint.ink(isDark: isDark)), isOn: current.tint == tint) {
+                    preferences.setIconTint(tint, forItem: id)
+                }
+            }
+            actions += [.divider]
+        }
+        actions += [
             .action("Default", isOn: current == nil) { preferences.setIcon(nil, forItem: id) },
             .divider
         ]
@@ -223,7 +240,9 @@ func sidebarItemIconActions(forItem id: String) -> [ContextAction] {
             let holdsCurrent = current.map { group.names.contains($0.name) } ?? false
             return .lazySubmenu(
                 group.initial,
-                image: holdsCurrent ? current.flatMap { NotionIconPack.coloredImage(named: $0.name, theme: preferences.theme) } : nil
+                image: holdsCurrent ? current.flatMap {
+                    NotionIconPack.coloredImage(named: $0.name, tint: $0.tint, theme: preferences.theme)
+                } : nil
             ) { group.names.map(iconAction) }
         }
         if !NotionIconPack.interfaceNames.isEmpty {
@@ -233,8 +252,16 @@ func sidebarItemIconActions(forItem id: String) -> [ContextAction] {
     }]
 }
 
-/// A Notion icon worn by a pinned app or site: the filled glyph alone, at
-/// the icon's full size, in a color drawn from the sidebar's theme.
+/// A dot of color for the menus.
+private func sidebarSwatch(_ color: NSColor) -> NSImage? {
+    NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
+        .withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [color]))
+}
+
+/// A Notion icon worn by a pinned app or site, in the manner of Claude's
+/// (Bruno, 27 October): the glyph in its color on a rounded cartouche
+/// washed with the same color, a little stronger on a dark bar. The color
+/// is the one chosen by hand, or drawn from the sidebar's theme.
 struct SidebarItemIconView: View {
     let icon: SidebarItemIcon
     let size: CGFloat
@@ -243,18 +270,25 @@ struct SidebarItemIconView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        Group {
+        let isDark = colorScheme == .dark
+        let ink = Color(nsColor: NotionIconPack.color(
+            forIcon: icon.name,
+            tint: icon.tint,
+            theme: sidebar.theme,
+            isDark: isDark
+        ))
+        ZStack {
+            // 0x2A and 0x40 of 255, as on Windows.
+            RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
+                .fill(ink.opacity(isDark ? 0x40 / 255.0 : 0x2A / 255.0))
             if let image = NotionIconPack.image(named: icon.name) {
                 Image(nsImage: image)
                     .renderingMode(.template)
                     .resizable()
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
-                    .foregroundStyle(Color(nsColor: NotionIconPack.color(
-                        forIcon: icon.name,
-                        theme: sidebar.theme,
-                        isDark: colorScheme == .dark
-                    )))
+                    .foregroundStyle(ink)
+                    .frame(width: size * 0.64, height: size * 0.64)
             }
         }
         .frame(width: size, height: size)

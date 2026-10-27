@@ -138,7 +138,16 @@ final class SidebarPreferences: ObservableObject {
             itemIcons[id] = nil
             return
         }
-        itemIcons[id] = SidebarItemIcon(name: name)
+        // A new icon keeps the color chosen for the old one.
+        itemIcons[id] = SidebarItemIcon(name: name, tint: itemIcons[id]?.tint)
+    }
+
+    /// The color chosen by hand for an item's icon; nil for the color the
+    /// theme gives it (Auto).
+    func setIconTint(_ tint: SidebarFolderGlyph.Tint?, forItem id: String) {
+        guard var icon = itemIcons[id] else { return }
+        icon.tint = tint
+        itemIcons[id] = icon
     }
 
     /// The icon an item wears, if the Notion pack can draw it; nil gives
@@ -674,4 +683,7 @@ enum SidebarLayout: String, CaseIterable {
 /// or site, drawn in the theme's colors.
 struct SidebarItemIcon: Codable, Equatable {
     var name: String
+    /// The folders' tint chosen for it, or nil for the color the theme
+    /// gives it (`NotionIconPack.color`).
+    var tint: SidebarFolderGlyph.Tint? = nil
 }
