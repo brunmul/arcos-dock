@@ -262,8 +262,9 @@ private func sidebarSwatch(_ color: NSColor) -> NSImage? {
 
 /// A Notion icon worn by a pinned app or site, in relief as in Bruno's
 /// mockup (27 October), like Windows' `NotionIcons.Embossed`: the glyph
-/// filled with a vertical gradient from its color lifted 6.4 % toward
-/// white at the top to 9.6 % toward black at the bottom, over a white copy
+/// filled with a vertical gradient from its color lifted 4 %·k toward
+/// white at the top to 6 %·k toward black at the bottom (k =
+/// `NotionIconPack.reliefStrength`), over a white copy
 /// half a point higher (60 % opaque, 21 % on a dark bar), like a stamp lit
 /// from above. No drop shadow, no bevel. The color is the one chosen by
 /// hand, or drawn from the sidebar's theme; on a tile, the tile itself is
@@ -278,6 +279,7 @@ struct SidebarItemIconView: View {
     var body: some View {
         let isDark = colorScheme == .dark
         let ink = NotionIconPack.color(forIcon: icon.name, tint: icon.tint, theme: sidebar.theme, isDark: isDark)
+        let k = NotionIconPack.reliefStrength(ink)
         ZStack {
             if let image = NotionIconPack.image(named: icon.name) {
                 glyph(image)
@@ -287,8 +289,8 @@ struct SidebarItemIconView: View {
                 glyph(image)
                     .foregroundStyle(LinearGradient(
                         colors: [
-                            Color(nsColor: NotionIconPack.mix(ink, .white, 0.064)),
-                            Color(nsColor: NotionIconPack.mix(ink, .black, 0.096))
+                            Color(nsColor: NotionIconPack.mix(ink, .white, 0.04 * k)),
+                            Color(nsColor: NotionIconPack.mix(ink, .black, 0.06 * k))
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -443,8 +445,9 @@ struct SidebarItemBackground: View {
 
 /// The tile of a pinned item wearing a Notion icon, as in Bruno's relief
 /// mockup (27 October), like Windows' `PinnedArea.Wash`: flat, a radial
-/// gradient from the icon's color mixed 30 % into the bar at the center to
-/// 4 % at the edge, over an ellipse 80 % of the width by 100 % of the
+/// gradient from the icon's color mixed 18 %·k into the bar at the center to
+/// 4 %·k at the edge (k = `NotionIconPack.reliefStrength`, lighter on light
+/// colors), over an ellipse 80 % of the width by 100 % of the
 /// height; ×1.06 brighter under the pointer. No shadow, line or gloss.
 struct SidebarTintedTileWash: View {
     let icon: SidebarItemIcon
@@ -458,8 +461,10 @@ struct SidebarTintedTileWash: View {
         let ink = NotionIconPack.color(forIcon: icon.name, tint: icon.tint, theme: sidebar.theme, isDark: isDark)
         let bar = NotionIconPack.barColor(theme: sidebar.theme, isDark: isDark)
         let factor = isHovered ? 1.06 : 1
-        let center = Color(nsColor: NotionIconPack.brightened(NotionIconPack.mix(bar, ink, 0.30), by: factor))
-        let edge = Color(nsColor: NotionIconPack.brightened(NotionIconPack.mix(bar, ink, 0.04), by: factor))
+        // Softened on light colors (Bruno found 30 % too marked).
+        let k = NotionIconPack.reliefStrength(ink)
+        let center = Color(nsColor: NotionIconPack.brightened(NotionIconPack.mix(bar, ink, 0.18 * k), by: factor))
+        let edge = Color(nsColor: NotionIconPack.brightened(NotionIconPack.mix(bar, ink, 0.04 * k), by: factor))
         Canvas { context, size in
             let radiusX = size.width * 0.8
             let radiusY = size.height * 1.0

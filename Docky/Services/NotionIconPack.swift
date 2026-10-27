@@ -129,6 +129,15 @@ enum NotionIconPack {
         return NSColor(srgbRed: m(a.0, b.0), green: m(a.1, b.1), blue: m(a.2, b.2), alpha: 1)
     }
 
+    /// How strongly the relief shows on a color: 1 − 0.55 × its luminance
+    /// (Rec. 709 weights on sRGB bytes), so light colors get a softer
+    /// gradient (Bruno, 27 October; as Windows' docky-windows 7fa65fa).
+    static func reliefStrength(_ color: NSColor) -> Double {
+        let c = bytes(of: color)
+        let luminance = (0.2126 * c.0 + 0.7152 * c.1 + 0.0722 * c.2) / 255
+        return 1 - 0.55 * luminance
+    }
+
     /// Each channel times `factor`, capped at white: the hover's lift.
     static func brightened(_ color: NSColor, by factor: Double) -> NSColor {
         let c = bytes(of: color)
