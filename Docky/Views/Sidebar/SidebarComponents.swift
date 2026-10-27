@@ -411,8 +411,9 @@ struct SidebarItemBackground: View {
         // The one in front wears the usual white pill, Notion icon or not,
         // so the selection reads the same everywhere (Bruno, 27 October).
         if let notionIcon, !isCurrent {
-            // As on Windows: 0x2A of 255 on a light bar, 0x40 on a dark
-            // one, 0x16 more under the pointer.
+            // As on Windows, a light wash (halved, Bruno, 27 October):
+            // 0x14 of 255 on a light bar, 0x22 on a dark one, 0x0C more
+            // under the pointer.
             let isDark = colorScheme == .dark
             let ink = NotionIconPack.color(
                 forIcon: notionIcon.name,
@@ -420,8 +421,8 @@ struct SidebarItemBackground: View {
                 theme: SidebarPreferences.shared.theme,
                 isDark: isDark
             )
-            let extra = isHovered ? 0x16 : 0
-            return Color(nsColor: ink).opacity(Double(min((isDark ? 0x40 : 0x2A) + extra, 255)) / 255)
+            let extra = isHovered ? 0x0C : 0
+            return Color(nsColor: ink).opacity(Double(min((isDark ? 0x22 : 0x14) + extra, 255)) / 255)
         }
         if isCurrent {
             return Color.white.opacity(colorScheme == .dark ? 0.18 : 0.78)
