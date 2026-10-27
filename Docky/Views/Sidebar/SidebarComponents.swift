@@ -404,13 +404,15 @@ struct SidebarItemBackground: View {
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(fill)
-            .shadow(color: .black.opacity(isCurrent && notionIcon == nil ? 0.1 : 0), radius: 1.5, x: 0, y: 0.5)
+            .shadow(color: .black.opacity(isCurrent ? 0.1 : 0), radius: 1.5, x: 0, y: 0.5)
     }
 
     private var fill: Color {
-        if let notionIcon {
+        // The one in front wears the usual white pill, Notion icon or not,
+        // so the selection reads the same everywhere (Bruno, 27 October).
+        if let notionIcon, !isCurrent {
             // As on Windows: 0x2A of 255 on a light bar, 0x40 on a dark
-            // one, 0x16 more under the pointer, 0x30 more in front.
+            // one, 0x16 more under the pointer.
             let isDark = colorScheme == .dark
             let ink = NotionIconPack.color(
                 forIcon: notionIcon.name,
@@ -418,7 +420,7 @@ struct SidebarItemBackground: View {
                 theme: SidebarPreferences.shared.theme,
                 isDark: isDark
             )
-            let extra = isCurrent ? 0x30 : (isHovered ? 0x16 : 0)
+            let extra = isHovered ? 0x16 : 0
             return Color(nsColor: ink).opacity(Double(min((isDark ? 0x40 : 0x2A) + extra, 255)) / 255)
         }
         if isCurrent {
