@@ -279,7 +279,9 @@ struct SidebarItemIconView: View {
     var body: some View {
         let isDark = colorScheme == .dark
         let ink = NotionIconPack.color(forIcon: icon.name, tint: icon.tint, theme: sidebar.theme, isDark: isDark)
+        // Softened by k in the light theme only; as first drawn on a dark bar.
         let k = NotionIconPack.reliefStrength(ink)
+        let (lift, shade) = isDark ? (0.064, 0.096) : (0.04 * k, 0.06 * k)
         ZStack {
             if let image = NotionIconPack.image(named: icon.name) {
                 glyph(image)
@@ -289,8 +291,8 @@ struct SidebarItemIconView: View {
                 glyph(image)
                     .foregroundStyle(LinearGradient(
                         colors: [
-                            Color(nsColor: NotionIconPack.mix(ink, .white, 0.04 * k)),
-                            Color(nsColor: NotionIconPack.mix(ink, .black, 0.06 * k))
+                            Color(nsColor: NotionIconPack.mix(ink, .white, lift)),
+                            Color(nsColor: NotionIconPack.mix(ink, .black, shade))
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -418,28 +420,43 @@ struct SidebarItemBackground: View {
     /// The Notion icon a pinned item's tile wears: the tile itself becomes
     /// its cartouche, washed with the icon's color (Bruno, 27 October).
     var notionIcon: SidebarItemIcon? = nil
+    /// A tile of the pinned grid: a light line around it, in the bar's
+    /// text color, so the tiles stand out (Bruno, 27 October).
+    var outlined: Bool = false
 
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        // The one in front wears the usual white pill, Notion icon or not,
-        // so the selection reads the same everywhere (Bruno, 27 October).
-        if let notionIcon, !isCurrent {
-            SidebarTintedTileWash(icon: notionIcon, isHovered: isHovered)
-                .clipShape(shape)
-        } else {
-            shape
-                .fill(fill)
-                .shadow(color: .black.opacity(isCurrent ? 0.1 : 0), radius: 1.5, x: 0, y: 0.5)
+        let isDark = colorScheme == .dark
+        Group {
+            // The one in front wears the white pill, Notion icon or not, so
+            // the selection reads the same everywhere.
+            if let notionIcon, !isCurrent {
+                SidebarTintedTileWash(icon: notionIcon, isHovered: isHovered)
+                    .clipShape(shape)
+            } else if isCurrent {
+                // A clearly visible active state (Bruno, 27 October; as
+                // Windows' docky-windows 89462ac): solid white on a light
+                // bar, 26 % on a dark one, a 1 pt line and a small shadow.
+                shape
+                    .fill(Color.white.opacity(isDark ? 0.26 : 1))
+                    .overlay(
+                        shape.strokeBorder(
+                            isDark ? Color.white.opacity(0.24) : Color.primary.opacity(0.16),
+                            lineWidth: 1
+                        )
+                    )
+                    .shadow(color: .black.opacity(isDark ? 0.35 : 0.14), radius: 3, x: 0, y: 1)
+            } else {
+                shape.fill(Color.primary.opacity(isHovered ? restingOpacity + 0.06 : restingOpacity))
+            }
         }
-    }
-
-    private var fill: Color {
-        if isCurrent {
-            return Color.white.opacity(colorScheme == .dark ? 0.18 : 0.78)
+        .overlay {
+            if outlined && !isCurrent {
+                shape.strokeBorder(Color.primary.opacity(isDark ? 0.10 : 0.08), lineWidth: 1)
+            }
         }
-        return Color.primary.opacity(isHovered ? restingOpacity + 0.06 : restingOpacity)
     }
 }
 
@@ -461,10 +478,12 @@ struct SidebarTintedTileWash: View {
         let ink = NotionIconPack.color(forIcon: icon.name, tint: icon.tint, theme: sidebar.theme, isDark: isDark)
         let bar = NotionIconPack.barColor(theme: sidebar.theme, isDark: isDark)
         let factor = isHovered ? 1.06 : 1
-        // Softened on light colors (Bruno found 30 % too marked).
+        // Softened on light colors in the light theme (Bruno found 30 % too
+        // marked there); as first drawn on a dark bar, "just right" there.
         let k = NotionIconPack.reliefStrength(ink)
-        let center = Color(nsColor: NotionIconPack.brightened(NotionIconPack.mix(bar, ink, 0.18 * k), by: factor))
-        let edge = Color(nsColor: NotionIconPack.brightened(NotionIconPack.mix(bar, ink, 0.04 * k), by: factor))
+        let (inner, outer) = isDark ? (0.30, 0.04) : (0.18 * k, 0.04 * k)
+        let center = Color(nsColor: NotionIconPack.brightened(NotionIconPack.mix(bar, ink, inner), by: factor))
+        let edge = Color(nsColor: NotionIconPack.brightened(NotionIconPack.mix(bar, ink, outer), by: factor))
         Canvas { context, size in
             let radiusX = size.width * 0.8
             let radiusY = size.height * 1.0
@@ -759,7 +778,8 @@ struct SidebarPinnedOverflow: View {
                     isHovered: isHovered || isShowingPanel,
                     isCurrent: false,
                     restingOpacity: 0.07,
-                    cornerRadius: SidebarMetrics.tileCornerRadius
+                    cornerRadius: SidebarMetrics.tileCornerRadius,
+                    outlined: true
                 ))
         }
     }
@@ -892,7 +912,8 @@ struct SidebarSiteTile: View {
                     isCurrent: isCurrent,
                     restingOpacity: 0.07,
                     cornerRadius: SidebarMetrics.tileCornerRadius,
-                    notionIcon: sidebar.wornIcon(forItem: SidebarPinnedItem.site(site).id)
+                    notionIcon: sidebar.wornIcon(forItem: SidebarPinnedItem.site(site).id),
+                    outlined: true
                 ))
                 // A site, not an app: a small globe in the top left corner,
                 // clear of the unread dot, the number and an account photo.
@@ -967,7 +988,8 @@ struct SidebarAppTile: View {
                     isCurrent: isFrontmost,
                     restingOpacity: 0.07,
                     cornerRadius: SidebarMetrics.tileCornerRadius,
-                    notionIcon: sidebar.wornIcon(forItem: SidebarPinnedItem.app(app).id)
+                    notionIcon: sidebar.wornIcon(forItem: SidebarPinnedItem.app(app).id),
+                    outlined: true
                 ))
                 .overlay(alignment: .topTrailing) {
                     if hasBadge {
