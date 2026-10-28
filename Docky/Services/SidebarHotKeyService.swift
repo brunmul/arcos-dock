@@ -35,8 +35,8 @@ final class SidebarHotKeyService: ObservableObject {
         watchModifiers()
     }
 
-    /// The pinned items the shortcuts reach, in shortcut order.
-    var numberedItems: [SidebarPinnedItem] {
+    /// Every pinned app and site, in their arranged order, super pins first.
+    var allPinnedItems: [SidebarPinnedItem] {
         var items: [SidebarPinnedItem] = []
         for tile in TileStore.shared.tiles where tile.id.hasPrefix("pinned:") {
             if case .app(let app) = tile.content, !app.bundleIdentifier.isEmpty {
@@ -44,7 +44,12 @@ final class SidebarHotKeyService: ObservableObject {
             }
         }
         items += SidebarPreferences.shared.pinnedSites.map(SidebarPinnedItem.site)
-        return Array(SidebarPreferences.shared.ordered(items).prefix(Self.digitKeyCodes.count))
+        return SidebarPreferences.shared.ordered(items)
+    }
+
+    /// The pinned items the shortcuts reach, in shortcut order.
+    var numberedItems: [SidebarPinnedItem] {
+        Array(allPinnedItems.prefix(Self.digitKeyCodes.count))
     }
 
     /// The shortcut number of a pinned item, 1 to 9, or nil past the ninth.

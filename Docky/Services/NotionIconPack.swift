@@ -100,6 +100,21 @@ enum NotionIconPack {
         return color(hue: hue.truncatingRemainder(dividingBy: 360), saturation: 0.55, lightness: isDark ? 0.72 : 0.40)
     }
 
+    /// The accent of a super pin's outline (Bruno, 28 October, as on
+    /// Windows): the clay #D97757 for the Claude theme and the themes with
+    /// almost no color; otherwise the hue of the theme's more colorful end,
+    /// the same hue the Notion icons start from, saturation 60 %, lightness
+    /// 45 % on a light bar and 68 % on a dark one.
+    static func superPinAccent(theme: SidebarTheme, isDark: Bool) -> NSColor {
+        let (topHue, topSaturation) = hueAndSaturation(of: theme.top)
+        let (bottomHue, bottomSaturation) = hueAndSaturation(of: theme.bottom)
+        if theme.isClaude || max(topSaturation, bottomSaturation) < 0.15 {
+            return hexColor(0xD97757)
+        }
+        let hue = topSaturation >= bottomSaturation ? topHue : bottomHue
+        return color(hue: hue, saturation: 0.60, lightness: isDark ? 0.68 : 0.45)
+    }
+
     /// Whether the sidebar is dark: the system's mode with the Claude
     /// theme, the theme's own otherwise. For the menus, drawn outside the
     /// sidebar's SwiftUI environment.

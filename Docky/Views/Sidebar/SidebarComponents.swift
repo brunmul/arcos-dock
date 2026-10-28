@@ -195,6 +195,19 @@ func sidebarMoveAction(forItem id: String) -> ContextAction {
     }
 }
 
+/// "Super Pin" for a pinned app or site, ticked while it is one: it then
+/// leads its place, stays shown even closed, and is ringed in the theme's
+/// accent (Bruno, 28 October, as on Windows).
+func sidebarSuperPinAction(forItem id: String) -> ContextAction {
+    let preferences = SidebarPreferences.shared
+    return .action("Super Pin", isOn: preferences.isSuperPin(id)) {
+        let allIDs = SidebarHotKeyService.shared.allPinnedItems.map(\.id)
+        withAnimation(SidebarMetrics.foldAnimation) {
+            preferences.toggleSuperPin(id, allIDs: allIDs)
+        }
+    }
+}
+
 /// "Icon" for a pinned app or site: an icon from the Notion pack in place
 /// of its own, in a color drawn from the theme or chosen by hand;
 /// "Default" gives it back its own icon. The ~900 page icons come by first
@@ -320,8 +333,10 @@ func sidebarSiteContextActions(for site: SidebarPinnedSite) -> [ContextAction] {
         .divider,
         .action("Unpin") {
             SidebarPreferences.shared.move(item: SidebarPinnedItem.site(site).id, to: .top)
+            SidebarPreferences.shared.superPinIDs.remove(SidebarPinnedItem.site(site).id)
             SidebarPreferences.shared.unpin(site)
         },
+        sidebarSuperPinAction(forItem: SidebarPinnedItem.site(site).id),
         sidebarMoveAction(forItem: SidebarPinnedItem.site(site).id)
     ] + sidebarItemIconActions(forItem: SidebarPinnedItem.site(site).id)
     // The site's open tabs close from here, as an app quits from its tile.
@@ -358,8 +373,10 @@ private func sidebarPinActions(for app: AppTile) -> [ContextAction] {
     return [
         .action("Unpin") {
             preferences.move(item: id, to: .top)
+            preferences.superPinIDs.remove(id)
             TileStore.shared.setPinnedApp(bundleIdentifier: bundleIdentifier, pinned: false)
         },
+        sidebarSuperPinAction(forItem: id),
         sidebarMoveAction(forItem: id)
     ]
 }
@@ -423,12 +440,17 @@ struct SidebarItemBackground: View {
     /// A tile of the pinned grid: a light line around it, in the bar's
     /// text color, so the tiles stand out (Bruno, 27 October).
     var outlined: Bool = false
+    /// A super pin: a line of this width in the theme's accent
+    /// (`NotionIconPack.superPinAccent`) in place of the fine one, over the
+    /// active state as well (Bruno, 28 October). Nil for any other item.
+    var superPinLineWidth: CGFloat? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         let isDark = colorScheme == .dark
+        let isSuperPin = superPinLineWidth != nil
         Group {
             // The one in front wears the white pill, Notion icon or not, so
             // the selection reads the same everywhere.
@@ -444,7 +466,7 @@ struct SidebarItemBackground: View {
                     .overlay(
                         shape.strokeBorder(
                             isDark ? Color.white.opacity(0.24) : Color.primary.opacity(0.16),
-                            lineWidth: 1
+                            lineWidth: isSuperPin ? 0 : 1
                         )
                     )
                     .shadow(color: .black.opacity(isDark ? 0.35 : 0.14), radius: 3, x: 0, y: 1)
@@ -453,7 +475,10 @@ struct SidebarItemBackground: View {
             }
         }
         .overlay {
-            if outlined && !isCurrent {
+            if let superPinLineWidth {
+                let accent = NotionIconPack.superPinAccent(theme: SidebarPreferences.shared.theme, isDark: isDark)
+                shape.strokeBorder(Color(nsColor: accent), lineWidth: superPinLineWidth)
+            } else if outlined && !isCurrent {
                 shape.strokeBorder(Color.primary.opacity(isDark ? 0.10 : 0.08), lineWidth: 1)
             }
         }
@@ -540,6 +565,7 @@ struct SidebarPinnedItemRow: View {
 
     @ObservedObject private var workspace = WorkspaceService.shared
     @ObservedObject private var browserTabs = BrowserTabsService.shared
+    @ObservedObject private var sidebar = SidebarPreferences.shared
     @State private var isHovered = false
 
     private var title: String {
@@ -554,6 +580,10 @@ struct SidebarPinnedItemRow: View {
         case .app(let app): workspace.isRunning(bundleIdentifier: app.bundleIdentifier)
         case .site(let site): browserTabs.tab(for: site) != nil
         }
+    }
+
+    private var isSuperPin: Bool {
+        sidebar.isSuperPin(item.id)
     }
 
     private var isCurrent: Bool {
@@ -584,10 +614,16 @@ struct SidebarPinnedItemRow: View {
                 SidebarSiteMark()
             }
         }
+        // A closed super pin stays in its place, faded (Bruno, 28 October).
+        .opacity(isSuperPin && !isOpen ? 0.5 : 1)
         .padding(.leading, SidebarMetrics.rowPadding)
         .padding(.trailing, 5)
         .frame(height: SidebarMetrics.rowHeight)
-        .background(SidebarItemBackground(isHovered: isHovered, isCurrent: isCurrent))
+        .background(SidebarItemBackground(
+            isHovered: isHovered,
+            isCurrent: isCurrent,
+            superPinLineWidth: isSuperPin ? 2.5 : nil
+        ))
         .contentShape(Rectangle())
         .onTapGesture { open() }
         .onHover { isHovered = $0 }
@@ -646,9 +682,12 @@ struct SidebarPlaceView: View {
     @ObservedObject private var workspace = WorkspaceService.shared
     @ObservedObject private var browserTabs = BrowserTabsService.shared
 
-    /// The open ones show; the others wait behind the overflow item.
-    private var openItems: [SidebarPinnedItem] { items.filter(isOpen) }
-    private var closedItems: [SidebarPinnedItem] { items.filter { !isOpen($0) } }
+    @ObservedObject private var sidebar = SidebarPreferences.shared
+
+    /// The open ones show, and the super pins even closed, first as they
+    /// come first in `items`; the others wait behind the overflow item.
+    private var openItems: [SidebarPinnedItem] { items.filter { isOpen($0) || sidebar.isSuperPin($0.id) } }
+    private var closedItems: [SidebarPinnedItem] { items.filter { !isOpen($0) && !sidebar.isSuperPin($0.id) } }
 
     private func isOpen(_ item: SidebarPinnedItem) -> Bool {
         switch item {
@@ -663,7 +702,7 @@ struct SidebarPlaceView: View {
         case .grid:
             LazyVGrid(columns: SidebarMetrics.tileColumns, spacing: SidebarMetrics.tileSpacing) {
                 ForEach(openItems) { item in
-                    draggable(SidebarPinnedItemTile(item: item), item: item)
+                    draggable(SidebarPinnedItemTile(item: item, dimsClosedSuperPin: true), item: item)
                 }
                 if !closed.isEmpty {
                     SidebarPinnedOverflow(items: closed, isRow: false, allItemIDs: allItemIDs)
@@ -835,6 +874,10 @@ private struct SidebarPinDropDelegate: DropDelegate {
 
 struct SidebarPinnedItemTile: View {
     let item: SidebarPinnedItem
+    /// In a place of the full sidebar, a closed super pin shows faded.
+    var dimsClosedSuperPin = false
+    /// In the compact rail, a super pin's line is 2 pt instead of 2.5.
+    var isRail = false
 
     @ObservedObject private var hotKeys = SidebarHotKeyService.shared
 
@@ -857,8 +900,8 @@ struct SidebarPinnedItemTile: View {
     @ViewBuilder
     private var tile: some View {
         switch item {
-        case .app(let app): SidebarAppTile(app: app)
-        case .site(let site): SidebarSiteTile(site: site)
+        case .app(let app): SidebarAppTile(app: app, dimsClosedSuperPin: dimsClosedSuperPin, isRail: isRail)
+        case .site(let site): SidebarSiteTile(site: site, dimsClosedSuperPin: dimsClosedSuperPin, isRail: isRail)
         }
     }
 }
@@ -869,6 +912,8 @@ struct SidebarPinnedItemTile: View {
 /// opens the site in a new one, launching Chrome when needed.
 struct SidebarSiteTile: View {
     let site: SidebarPinnedSite
+    var dimsClosedSuperPin = false
+    var isRail = false
 
     @ObservedObject private var workspace = WorkspaceService.shared
     @ObservedObject private var browserTabs = BrowserTabsService.shared
@@ -894,12 +939,17 @@ struct SidebarSiteTile: View {
             && openTab.isActive && openTab.isInFrontWindow
     }
 
+    private var isSuperPin: Bool {
+        sidebar.isSuperPin(SidebarPinnedItem.site(site).id)
+    }
+
     var body: some View {
         Button {
             browserTabs.openOrFocus(site)
         } label: {
             icon
                 .frame(width: SidebarMetrics.tileIconSize, height: SidebarMetrics.tileIconSize)
+                .opacity(dimsClosedSuperPin && isSuperPin && openTab == nil ? 0.5 : 1)
                 .frame(maxWidth: .infinity)
                 .frame(height: SidebarMetrics.tileHeight)
                 // Every tile alike, the way Arc draws its favorites: the
@@ -913,7 +963,8 @@ struct SidebarSiteTile: View {
                     restingOpacity: 0.07,
                     cornerRadius: SidebarMetrics.tileCornerRadius,
                     notionIcon: sidebar.wornIcon(forItem: SidebarPinnedItem.site(site).id),
-                    outlined: true
+                    outlined: true,
+                    superPinLineWidth: isSuperPin ? (isRail ? 2 : 2.5) : nil
                 ))
                 // A site, not an app: a small globe in the top left corner,
                 // clear of the unread dot, the number and an account photo.
@@ -956,6 +1007,8 @@ struct SidebarSiteTile: View {
 /// pinned apps and by every app in the compact rail.
 struct SidebarAppTile: View {
     let app: AppTile
+    var dimsClosedSuperPin = false
+    var isRail = false
 
     @ObservedObject private var workspace = WorkspaceService.shared
     @ObservedObject private var badges = DockBadgeService.shared
@@ -971,11 +1024,16 @@ struct SidebarAppTile: View {
         preferences.showsAppBadges && badges.badge(forBundleIdentifier: app.bundleIdentifier) != nil
     }
 
+    private var isSuperPin: Bool {
+        sidebar.isSuperPin(SidebarPinnedItem.app(app).id)
+    }
+
     var body: some View {
         Button {
             workspace.activateOrOpen(bundleIdentifier: app.bundleIdentifier)
         } label: {
             SidebarAppIcon(bundleIdentifier: app.bundleIdentifier, size: SidebarMetrics.tileIconSize)
+                .opacity(dimsClosedSuperPin && isSuperPin && !workspace.isRunning(bundleIdentifier: app.bundleIdentifier) ? 0.5 : 1)
                 .frame(maxWidth: .infinity)
                 .frame(height: SidebarMetrics.tileHeight)
                 // Every tile alike, the way Arc draws its favorites: the
@@ -989,7 +1047,8 @@ struct SidebarAppTile: View {
                     restingOpacity: 0.07,
                     cornerRadius: SidebarMetrics.tileCornerRadius,
                     notionIcon: sidebar.wornIcon(forItem: SidebarPinnedItem.app(app).id),
-                    outlined: true
+                    outlined: true,
+                    superPinLineWidth: isSuperPin ? (isRail ? 2 : 2.5) : nil
                 ))
                 .overlay(alignment: .topTrailing) {
                     if hasBadge {

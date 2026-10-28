@@ -98,10 +98,15 @@ final class SidebarPreferences: ObservableObject {
         didSet { defaults.set(pinnedOrder, forKey: Keys.pinnedOrder) }
     }
 
-    /// `items` in the arranged order.
+    /// `items` in the arranged order, the super pins first in their own
+    /// order: a drag stays free, but a plain pin dropped among the super
+    /// pins goes back after them.
     func ordered(_ items: [SidebarPinnedItem]) -> [SidebarPinnedItem] {
         let rank = Dictionary(pinnedOrder.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
         return items.enumerated().sorted { lhs, rhs in
+            let leftSuper = superPinIDs.contains(lhs.element.id)
+            let rightSuper = superPinIDs.contains(rhs.element.id)
+            if leftSuper != rightSuper { return leftSuper }
             let left = rank[lhs.element.id] ?? (pinnedOrder.count + lhs.offset)
             let right = rank[rhs.element.id] ?? (pinnedOrder.count + rhs.offset)
             return left < right
@@ -118,6 +123,34 @@ final class SidebarPreferences: ObservableObject {
         order.insert(id, at: to)
         pinnedOrder = order
         move(item: id, to: place(ofItem: target))
+    }
+
+    // MARK: Super pins
+
+    /// Pinned apps and sites set as super pins, by `SidebarPinnedItem.id`
+    /// (Bruno, 28 October, as on Windows): first of their place, always
+    /// shown even closed, and ringed in the theme's accent.
+    @Published var superPinIDs: Set<String> {
+        didSet { defaults.set(Array(superPinIDs), forKey: Keys.superPinIDs) }
+    }
+
+    func isSuperPin(_ id: String) -> Bool {
+        superPinIDs.contains(id)
+    }
+
+    /// Makes an item a super pin, at the end of the super pins, or a plain
+    /// pin again, right after them. `allIDs` is every pinned item in its
+    /// current order.
+    func toggleSuperPin(_ id: String, allIDs: [String]) {
+        var order = allIDs.filter { $0 != id }
+        if superPinIDs.contains(id) {
+            superPinIDs.remove(id)
+        } else {
+            superPinIDs.insert(id)
+        }
+        let lastSuper = order.lastIndex { superPinIDs.contains($0) }
+        order.insert(id, at: lastSuper.map { $0 + 1 } ?? 0)
+        pinnedOrder = order
     }
 
     // MARK: Custom icons
@@ -325,6 +358,7 @@ final class SidebarPreferences: ObservableObject {
         static let fullWidth = "docky.fork.sidebar.fullWidth"
         static let bottomItemIDs = "docky.fork.sidebar.bottomItems"
         static let itemIcons = "docky.fork.sidebar.itemIcons"
+        static let superPinIDs = "docky.fork.sidebar.superPins"
         static let pinnedOrder = "docky.fork.sidebar.pinnedOrder"
         static let topWidgetIDs = "docky.fork.sidebar.topWidgets"
         static let topLayout = "docky.fork.sidebar.topLayout"
@@ -366,6 +400,7 @@ final class SidebarPreferences: ObservableObject {
         hiddenWidgetIDs = Set(defaults.stringArray(forKey: Keys.hiddenWidgetIDs) ?? [])
         bottomItemIDs = Set(defaults.stringArray(forKey: Keys.bottomItemIDs) ?? [])
         pinnedOrder = defaults.stringArray(forKey: Keys.pinnedOrder) ?? []
+        superPinIDs = Set(defaults.stringArray(forKey: Keys.superPinIDs) ?? [])
         itemIcons = defaults.data(forKey: Keys.itemIcons)
             .flatMap { try? JSONDecoder().decode([String: SidebarItemIcon].self, from: $0) } ?? [:]
         topWidgetIDs = Set(defaults.stringArray(forKey: Keys.topWidgetIDs) ?? [])
