@@ -1853,14 +1853,16 @@ struct SidebarGroupHeader: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            Image(systemName: "chevron.right")
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(.tertiary)
-                .rotationEffect(.degrees(isFolded ? 0 : 90))
-
+            // The title, then its chevron in the same color (Bruno, 28
+            // October, as on Windows), then the count.
             Text(title)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.secondary)
+                .rotationEffect(.degrees(isFolded ? 0 : 90))
 
             if isFolded, count > 0 {
                 Text("\(count)")
