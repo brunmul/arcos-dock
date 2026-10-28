@@ -1273,12 +1273,9 @@ extension SidebarTheme {
     /// mode.
     var secondarySurface: Color {
         if isClaude {
-            return Color(nsColor: NSColor(name: nil) { appearance in
-                if appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua {
-                    return NSColor(srgbRed: 0.169, green: 0.165, blue: 0.157, alpha: 1)
-                }
-                return NSColor(srgbRed: 0.925, green: 0.918, blue: 0.882, alpha: 1)
-            })
+            return isDark
+                ? Color(.sRGB, red: 0.169, green: 0.165, blue: 0.157)
+                : Color(.sRGB, red: 0.925, green: 0.918, blue: 0.882)
         }
         func channel(_ shift: Int) -> Double {
             Double(((top >> shift) & 0xFF) + ((bottom >> shift) & 0xFF)) / 2 / 255

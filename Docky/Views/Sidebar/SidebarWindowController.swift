@@ -167,6 +167,7 @@ final class SidebarWindowController: NSObject {
         // widens the window to whatever its content would ideally take.
         hostingView.sizingOptions = []
         panel.contentView = hostingView
+        panel.appearance = preferences.windowAppearance
         return panel
     }
 
@@ -193,7 +194,16 @@ final class SidebarWindowController: NSObject {
         let hostingView = NSHostingView(rootView: SidebarCornersView())
         hostingView.sizingOptions = []
         panel.contentView = hostingView
+        panel.appearance = preferences.windowAppearance
         return panel
+    }
+
+    /// Forces the bar's windows to Light or Dark, or lets them follow the
+    /// system in Auto (`SidebarPreferences.windowAppearance`).
+    private func applyAppearance() {
+        let appearance = preferences.windowAppearance
+        panel?.appearance = appearance
+        cornersPanel?.appearance = appearance
     }
 
     private func cornersFrame(besides frame: CGRect) -> CGRect {
@@ -290,12 +300,28 @@ final class SidebarWindowController: NSObject {
             }
             .store(in: &cancellables)
 
-        // Theme or wallpaper option: the desktop picture follows.
-        Publishers.CombineLatest(preferences.$themeID.removeDuplicates(), preferences.$matchesWallpaper.removeDuplicates())
+        // Theme, mode (or the system's, in Auto) or wallpaper option: the
+        // desktop picture follows.
+        Publishers.CombineLatest4(
+            preferences.$themeID.removeDuplicates(),
+            preferences.$appearance.removeDuplicates(),
+            preferences.$systemIsDark.removeDuplicates(),
+            preferences.$matchesWallpaper.removeDuplicates()
+        )
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _, enabled in
+            .sink { [weak self] _, _, _, enabled in
                 guard let self else { return }
                 SidebarWallpaper.apply(self.preferences.theme, enabled: enabled)
+            }
+            .store(in: &cancellables)
+
+        // Light, Dark or Auto: the bar's windows take that appearance, so
+        // the menus opened from them follow it too.
+        preferences.$appearance
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.applyAppearance()
             }
             .store(in: &cancellables)
 

@@ -56,8 +56,44 @@ final class SidebarPreferences: ObservableObject {
         didSet { defaults.set(matchesWallpaper, forKey: Keys.matchesWallpaper) }
     }
 
-    var theme: SidebarTheme {
+    /// Which variant of the theme shows (Bruno, 28 October, as on
+    /// Windows): Light, Dark, or Auto, which follows the system live.
+    @Published var appearance: SidebarAppearance {
+        didSet { defaults.set(appearance.rawValue, forKey: Keys.appearance) }
+    }
+
+    /// The system's own mode, kept current for Auto.
+    @Published private(set) var systemIsDark = false
+    private var systemAppearanceObservation: NSKeyValueObservation?
+
+    /// The mode the bar is in: the one forced by `appearance`, or the
+    /// system's in Auto.
+    var isDark: Bool {
+        switch appearance {
+        case .light: false
+        case .dark: true
+        case .auto: systemIsDark
+        }
+    }
+
+    /// The chosen theme as it is defined, in its own mode.
+    var baseTheme: SidebarTheme {
         SidebarTheme.all.first { $0.id == themeID } ?? .claude
+    }
+
+    /// The chosen theme in the mode in use: what the bar wears everywhere.
+    var theme: SidebarTheme {
+        baseTheme.variant(isDark: isDark)
+    }
+
+    /// The window appearance that goes with `appearance`, so menus and
+    /// system controls in the bar's windows follow it; nil in Auto.
+    var windowAppearance: NSAppearance? {
+        switch appearance {
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        case .auto: nil
+        }
     }
 
     /// Parts left out of the bar along the bottom and of the compact rail,
@@ -366,6 +402,7 @@ final class SidebarPreferences: ObservableObject {
         static let pinnedSites = "docky.fork.sidebar.pinnedSites"
         static let edge = "docky.fork.sidebar.edge"
         static let themeID = "docky.fork.sidebar.theme"
+        static let appearance = "docky.fork.sidebar.appearance"
         static let matchesWallpaper = "docky.fork.sidebar.matchesWallpaper"
         static let hiddenSections = "docky.fork.sidebar.hiddenSections"
         static let isEnabled = "docky.fork.sidebar.isEnabled"
@@ -387,6 +424,7 @@ final class SidebarPreferences: ObservableObject {
         isEnabled = defaults.object(forKey: Keys.isEnabled) as? Bool ?? true
         edge = defaults.string(forKey: Keys.edge).flatMap(SidebarEdge.init(rawValue:)) ?? .left
         themeID = defaults.string(forKey: Keys.themeID) ?? SidebarTheme.claude.id
+        appearance = defaults.string(forKey: Keys.appearance).flatMap(SidebarAppearance.init(rawValue:)) ?? .auto
         matchesWallpaper = defaults.object(forKey: Keys.matchesWallpaper) as? Bool ?? true
         hiddenSections = Set((defaults.stringArray(forKey: Keys.hiddenSections) ?? []).compactMap(SidebarSection.init(rawValue:)))
         isPinned = defaults.object(forKey: Keys.isPinned) as? Bool ?? true
@@ -421,6 +459,20 @@ final class SidebarPreferences: ObservableObject {
         } else {
             folderGlyphs = [:]
         }
+        // The system's mode, for Auto: the app's own appearance is never
+        // set, so it follows the system and changes with it.
+        systemIsDark = Self.readSystemIsDark()
+        systemAppearanceObservation = NSApplication.shared.observe(\.effectiveAppearance) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                let isDark = Self.readSystemIsDark()
+                if isDark != self.systemIsDark { self.systemIsDark = isDark }
+            }
+        }
+    }
+
+    private static func readSystemIsDark() -> Bool {
+        NSApplication.shared.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
     }
 
     func toggleExpansion(ofApp bundleIdentifier: String) {
@@ -456,6 +508,24 @@ final class SidebarPreferences: ObservableObject {
     }
 }
 
+/// Light, Dark or Auto (follows the system): which variant of the theme
+/// the bar wears.
+enum SidebarAppearance: String, CaseIterable, Identifiable {
+    case light
+    case dark
+    case auto
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .light: "Light"
+        case .dark: "Dark"
+        case .auto: "Auto"
+        }
+    }
+}
+
 enum SidebarEdge: String, CaseIterable {
     case left
     case bottom
@@ -475,6 +545,50 @@ struct SidebarTheme: Identifiable, Equatable {
     let isDark: Bool
 
     var isClaude: Bool { id == Self.claude.id }
+
+    /// The theme in light or dark mode (Bruno, 28 October, as on Windows):
+    /// its own colors when the mode is its own, otherwise drawn from them,
+    /// same hue, darkened to a charcoal of that hue or lightened to a pale
+    /// wash. Claude keeps its paper and charcoal.
+    func variant(isDark dark: Bool) -> SidebarTheme {
+        if isClaude {
+            let surface = dark ? 0x1F1E1D : 0xF5F4ED
+            return SidebarTheme(id: id, name: name, top: surface, bottom: surface, isDark: dark)
+        }
+        guard dark != isDark else { return self }
+        return SidebarTheme(id: id, name: name, top: Self.variant(top, dark: dark), bottom: Self.variant(bottom, dark: dark), isDark: dark)
+    }
+
+    /// A light theme's color made dark (lightness 12 % to 28 %, saturation
+    /// × 0.55), or a dark theme's made light (lightness 86 % to 97 %,
+    /// saturation × 0.85), in HSL. Same values as on Windows
+    /// (`SidebarTheme.Variant`, docky-windows 0743d8e).
+    private static func variant(_ hex: Int, dark: Bool) -> Int {
+        let r = Double((hex >> 16) & 0xFF) / 255, g = Double((hex >> 8) & 0xFF) / 255, b = Double(hex & 0xFF) / 255
+        let maximum = max(r, g, b), minimum = min(r, g, b), d = maximum - minimum
+        var l = (maximum + minimum) / 2
+        var s = d < 1e-6 ? 0 : d / (1 - abs(2 * l - 1))
+        var h = 0.0
+        if d >= 1e-6 {
+            if maximum == r {
+                h = 60 * ((g - b) / d + 6).truncatingRemainder(dividingBy: 6)
+            } else if maximum == g {
+                h = 60 * ((b - r) / d + 2)
+            } else {
+                h = 60 * ((r - g) / d + 4)
+            }
+        }
+        (l, s) = dark ? (0.12 + 0.16 * l, s * 0.55) : (min(0.86 + 0.30 * l, 0.97), s * 0.85)
+        let c = (1 - abs(2 * l - 1)) * s
+        let x = c * (1 - abs((h / 60).truncatingRemainder(dividingBy: 2) - 1))
+        let m = l - c / 2
+        let (r2, g2, b2): (Double, Double, Double) =
+            h < 60 ? (c, x, 0) : h < 120 ? (x, c, 0) : h < 180 ? (0, c, x)
+            : h < 240 ? (0, x, c) : h < 300 ? (x, 0, c) : (c, 0, x)
+        // Rounded half to even, as .NET's Math.Round, so both match.
+        func byte(_ v: Double) -> Int { Int((min(max(v + m, 0), 1) * 255).rounded(.toNearestOrEven)) }
+        return byte(r2) << 16 | byte(g2) << 8 | byte(b2)
+    }
 
     static let claude = SidebarTheme(id: "claude", name: "Claude", top: 0xF5F4ED, bottom: 0xF5F4ED, isDark: false)
 

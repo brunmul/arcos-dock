@@ -115,13 +115,11 @@ enum NotionIconPack {
         return color(hue: hue, saturation: 0.60, lightness: isDark ? 0.68 : 0.45)
     }
 
-    /// Whether the sidebar is dark: the system's mode with the Claude
-    /// theme, the theme's own otherwise. For the menus, drawn outside the
-    /// sidebar's SwiftUI environment.
+    /// Whether the sidebar is dark: the mode of `theme`, which is the
+    /// theme in the mode in use (`SidebarPreferences.theme`). For the
+    /// menus, drawn outside the sidebar's SwiftUI environment.
     static func sidebarIsDark(_ theme: SidebarTheme) -> Bool {
-        theme.isClaude
-            ? NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            : theme.isDark
+        theme.isDark
     }
 
     /// The icon filled with its color, for the menus.

@@ -135,11 +135,30 @@ private struct SidebarAppearanceSettings: View {
     private let columns = [GridItem(.adaptive(minimum: 120), spacing: 12)]
 
     var body: some View {
-        SettingsGroup(title: "Theme", note: "The bar's colors. Claude follows the system's light or dark mode.") {
+        SettingsGroup(title: "Theme", note: "The bar's colors, in light or dark. Auto follows the system's mode.") {
+            HStack(alignment: .center, spacing: 12) {
+                SettingsSymbol(symbol: "circle.lefthalf.filled")
+                Text("Mode")
+                Spacer(minLength: 12)
+                Picker("Mode", selection: $sidebar.appearance) {
+                    ForEach(SidebarAppearance.allCases) { appearance in
+                        Text(appearance.title).tag(appearance)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .settingsCard()
+
+            // Each swatch in the mode in use, so it shows what the bar
+            // will wear.
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(SidebarTheme.all) { theme in
                     ChoiceCard(title: theme.name, isSelected: sidebar.themeID == theme.id) {
-                        ThemeSketch(theme: theme)
+                        ThemeSketch(theme: theme.variant(isDark: sidebar.isDark))
                     } action: { sidebar.themeID = theme.id }
                 }
             }
@@ -374,11 +393,10 @@ private struct ScreenSketch: View {
     }
 }
 
-/// A theme as a small bar in its colors beside a window.
+/// A theme as a small bar in its colors beside a window. `theme` is
+/// already in the mode to show (`SidebarTheme.variant(isDark:)`).
 private struct ThemeSketch: View {
     let theme: SidebarTheme
-
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         GeometryReader { geometry in
@@ -401,19 +419,11 @@ private struct ThemeSketch: View {
         }
     }
 
-    private var isDark: Bool {
-        theme.isClaude ? colorScheme == .dark : theme.isDark
-    }
+    private var ink: Color { theme.isDark ? .white : .black }
 
-    private var ink: Color { isDark ? .white : .black }
+    private var top: Color { Self.color(theme.top) }
 
-    private var top: Color {
-        theme.isClaude ? SidebarPalette.surface : Self.color(theme.top)
-    }
-
-    private var bottom: Color {
-        theme.isClaude ? SidebarPalette.surface : Self.color(theme.bottom)
-    }
+    private var bottom: Color { Self.color(theme.bottom) }
 
     private static func color(_ hex: Int) -> Color {
         Color(

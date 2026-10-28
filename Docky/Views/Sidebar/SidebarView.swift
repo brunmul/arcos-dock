@@ -367,16 +367,14 @@ struct SidebarChrome: View {
     @ObservedObject private var sidebar = SidebarPreferences.shared
 
     var body: some View {
+        // The theme in the mode in use; Claude's paper or charcoal is a
+        // gradient of one color.
         let theme = sidebar.theme
-        if theme.isClaude {
-            SidebarPalette.surface
-        } else {
-            LinearGradient(
-                colors: [Color(hex: theme.top), Color(hex: theme.bottom)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
+        LinearGradient(
+            colors: [Color(hex: theme.top), Color(hex: theme.bottom)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 }
 
@@ -392,15 +390,11 @@ extension Color {
 }
 
 extension View {
-    /// Light text on a dark theme, dark text on a light one; the system's
-    /// mode with the Claude theme.
-    @ViewBuilder
+    /// Light text on a dark theme, dark text on a light one. `theme` is
+    /// the one in the mode in use (`SidebarPreferences.theme`), so this is
+    /// the forced mode, or the system's in Auto.
     func sidebarThemeScheme(_ theme: SidebarTheme) -> some View {
-        if theme.isClaude {
-            self
-        } else {
-            environment(\.colorScheme, theme.isDark ? .dark : .light)
-        }
+        environment(\.colorScheme, theme.isDark ? .dark : .light)
     }
 }
 
@@ -437,13 +431,7 @@ struct SidebarCornersView: View {
     @ViewBuilder
     private func corner(isTop: Bool) -> some View {
         let theme = sidebar.theme
-        Group {
-            if theme.isClaude {
-                SidebarPalette.surface
-            } else {
-                Color(hex: isTop ? theme.top : theme.bottom)
-            }
-        }
+        Color(hex: isTop ? theme.top : theme.bottom)
         .frame(width: SidebarPreferences.cornerRadius, height: SidebarPreferences.cornerRadius)
         .clipShape(SidebarConcaveCorner(isTop: isTop))
     }
@@ -1469,7 +1457,7 @@ enum SidebarWallpaper {
                 width: screen.frame.width * screen.backingScaleFactor,
                 height: screen.frame.height * screen.backingScaleFactor
             )
-            let url = folder.appendingPathComponent("\(theme.id)-\(Int(size.width))x\(Int(size.height)).png")
+            let url = folder.appendingPathComponent("\(theme.id)-\(theme.isDark ? "dark" : "light")-\(Int(size.width))x\(Int(size.height)).png")
             if !FileManager.default.fileExists(atPath: url.path) {
                 guard render(theme, size: size, to: url) else { continue }
             }
