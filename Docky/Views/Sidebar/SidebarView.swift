@@ -85,9 +85,18 @@ struct SidebarView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 10)
 
+            // The pinned apps and sites at the top stay put: scrolling the
+            // folders, Apps and Web never hides them (Bruno, 28 October).
+            VStack(alignment: .leading, spacing: 1) {
+                pinnedSection
+            }
+            .padding(.horizontal, Self.horizontalPadding)
+
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 1) {
-                    pinnedSection
+                    if !foldsPinned {
+                        pinnedFolderTiles
+                    }
 
                     SidebarDivider()
                         .padding(.vertical, 6)
@@ -112,9 +121,10 @@ struct SidebarView: View {
     }
 
     /// Everything pinned to the dock, as two small blocks of tiles: the
-    /// apps, then the folders and the Trash. The folder whose tile is
-    /// selected lists its contents underneath. It folds under its header
-    /// like Apps and Web.
+    /// apps, fixed at the top, then the folders and the Trash, which
+    /// scroll with the lists (`pinnedFolderTiles`). The folder whose tile
+    /// is selected lists its contents underneath. Both fold under the
+    /// header like Apps and Web.
     @ViewBuilder
     private var pinnedSection: some View {
         SidebarGroupHeader(
@@ -124,18 +134,14 @@ struct SidebarView: View {
             toggle: { withAnimation(SidebarMetrics.foldAnimation) { foldsPinned.toggle() } }
         )
         .padding(.bottom, foldsPinned ? 0 : 3)
-        if !foldsPinned {
-            pinnedTiles
+        if !foldsPinned, !topItems.isEmpty || !topWidgets.isEmpty {
+            SidebarPlaceView(items: topItems, widgets: topWidgets, layout: sidebar.topLayout, allItemIDs: pinnedItems.map(\.id))
         }
     }
 
     @ViewBuilder
-    private var pinnedTiles: some View {
+    private var pinnedFolderTiles: some View {
         let hasTopContent = !topItems.isEmpty || !topWidgets.isEmpty
-        if hasTopContent {
-            SidebarPlaceView(items: topItems, widgets: topWidgets, layout: sidebar.topLayout, allItemIDs: pinnedItems.map(\.id))
-        }
-
         LazyVGrid(columns: SidebarMetrics.tileColumns, spacing: SidebarMetrics.tileSpacing) {
             ForEach(pinnedFolders) { folder in
                 SidebarFolderTileView(
@@ -623,14 +629,20 @@ private struct SidebarRail: View {
             SidebarOptionsMenu()
                 .padding(.bottom, 6)
 
+            // The pinned items stay put above what scrolls (Bruno, 28
+            // October), as in the full sidebar.
+            if sidebar.shows(.pinned), !pinnedItems.isEmpty {
+                VStack(spacing: 4) {
+                    ForEach(pinnedItems) { item in
+                        SidebarPinnedItemTile(item: item, isRail: true)
+                    }
+                }
+                .frame(width: Self.itemWidth)
+                .padding(.bottom, 4)
+            }
+
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 4) {
-                    if sidebar.shows(.pinned) {
-                        ForEach(pinnedItems) { item in
-                            SidebarPinnedItemTile(item: item, isRail: true)
-                        }
-                    }
-
                     if hasFolders, sidebar.shows(.folders) {
                         railDivider
 
