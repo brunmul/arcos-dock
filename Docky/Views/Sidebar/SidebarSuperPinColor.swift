@@ -205,10 +205,10 @@ struct SidebarSuperPinDecoration: View {
 }
 
 /// The mark of the pinned item in front, on trial (Bruno, 29 October; as
-/// Windows' docky-windows c3279cb, fe95cd2 and 2c1b49a): a bar 3.5 pt tall
-/// across the tile's flat foot (its width less 8 pt each side, where the
-/// corners begin), at the very foot just inside its line, rounded on top
-/// only, opaque, in its icon's color (the super pin's,
+/// Windows' docky-windows c3279cb, 2c1b49a and 2fcfd96): a pill 3 pt tall,
+/// rounded all round, across the tile's foot 10 pt in from each side and
+/// 2 pt above its edge, so its ends show; opaque, in its icon's color (the
+/// super pin's,
 /// `SidebarSuperPinColor`), mixed 55 % with white on a dark bar so it
 /// shows on any theme. Over the white pill, which stays.
 struct SidebarActiveBar: View {
@@ -223,12 +223,12 @@ struct SidebarActiveBar: View {
         let isDark = colorScheme == .dark
         let ink = SidebarSuperPinColor.color(forItem: itemID, theme: sidebar.theme, isDark: isDark)
         let color = isDark ? NotionIconPack.mix(ink, .white, 0.55) : ink
-        UnevenRoundedRectangle(topLeadingRadius: 1.75, topTrailingRadius: 1.75, style: .continuous)
+        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
             .fill(Color(nsColor: color))
             .frame(maxWidth: .infinity)
-            .frame(height: 3.5)
-            .padding(.horizontal, 8)
-            .padding(.bottom, 1)
+            .frame(height: 3)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 2)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
