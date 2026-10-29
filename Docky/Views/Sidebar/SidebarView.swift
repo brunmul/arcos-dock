@@ -523,19 +523,22 @@ struct SidebarAppMark: View {
         Button {
             SettingsNavigator.shared.requestPane(id: "sidebarLayout")
         } label: {
-            HStack(alignment: .bottom, spacing: 5) {
+            // The logo sheet's lockup, at 15 pt for the arch: the arch's
+            // bounds are 117 × 120 units there, the word sits 41.9 units
+            // to its right and 4 units below its top.
+            let unit: CGFloat = 15 / 120.12
+            HStack(alignment: .top, spacing: 41.86 * unit) {
                 OrielSymbolShape()
                     .fill(Color.primary, style: FillStyle(eoFill: true))
                     .frame(width: 15 * OrielSymbolShape.aspectRatio, height: 15)
                 if showsWordmark {
-                    // Fraunces isn't on the Mac; New York is the soft
-                    // serif closest to it. Its cap height comes close to
-                    // the arch, sitting on the same line.
-                    Text(verbatim: "Oriel")
-                        .font(.system(size: 18, weight: .medium, design: .serif))
-                        .foregroundStyle(Color.primary)
-                        .fixedSize()
-                        .alignmentGuide(.bottom) { $0[.lastTextBaseline] }
+                    OrielWordmarkShape()
+                        .fill(Color.primary)
+                        .frame(
+                            width: OrielWordmarkShape.bounds.width * unit,
+                            height: OrielWordmarkShape.bounds.height * unit
+                        )
+                        .padding(.top, 3.98 * unit)
                 }
             }
             .padding(.horizontal, showsWordmark ? 6 : 0)
