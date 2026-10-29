@@ -1654,6 +1654,7 @@ struct SidebarOpenAppSection: View {
         HStack(spacing: SidebarMetrics.rowSpacing) {
             SidebarAppIcon(bundleIdentifier: app.bundleIdentifier, size: SidebarMetrics.rowIconSize)
                 .opacity(app.isHidden ? 0.5 : 1)
+                .background(SidebarRowIconPlate())
 
             Text(app.localizedName)
                 .font(.system(size: SidebarMetrics.rowFontSize, weight: isFrontmost ? .medium : .regular))
@@ -1871,6 +1872,7 @@ struct SidebarBrowserTabRow: View {
         HStack(spacing: SidebarMetrics.rowSpacing) {
             icon
                 .frame(width: SidebarMetrics.rowIconSize, height: SidebarMetrics.rowIconSize)
+                .background(SidebarRowIconPlate())
 
             Text(title)
                 .font(.system(size: SidebarMetrics.rowFontSize, weight: isCurrent ? .medium : .regular))
@@ -1945,6 +1947,26 @@ struct SidebarBrowserTabRow: View {
 
     private var icon: some View {
         SidebarWebIcon(url: tab.url, size: SidebarMetrics.rowIconSize)
+    }
+}
+
+/// On trial (Bruno, 29 October; as Windows' docky-windows bce30b1): a small
+/// plate behind the icon of each row of Apps and Web, a rounded square
+/// 22 × 22 pt (radius 6) centered on the 16 pt icon, so neither the label
+/// nor the row's height moves: white at 85 % on a light bar, 10 % on a
+/// dark one, a 0.75 pt line in the text color at 10 % / 6 %.
+struct SidebarRowIconPlate: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let isDark = colorScheme == .dark
+        let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
+        shape
+            .fill(Color.white.opacity(isDark ? 0.10 : 0.85))
+            .overlay(shape.strokeBorder(Color.primary.opacity(isDark ? 0.06 : 0.10), lineWidth: 0.75))
+            .frame(width: 22, height: 22)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
