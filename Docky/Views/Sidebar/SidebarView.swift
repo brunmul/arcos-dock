@@ -562,7 +562,7 @@ private struct SidebarOptionsMenu: View {
             Button("Switch to Dock") {
                 SidebarWindowController.shared.setSidebarMode(false)
             }
-            Button("Quit Docky") {
+            Button("Quit Oriel") {
                 NSApp.terminate(nil)
             }
         } label: {

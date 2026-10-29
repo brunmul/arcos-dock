@@ -765,7 +765,7 @@ private struct StartMenuView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Docky Settings")
+            .help("Oriel Settings")
 
             Menu {
                 Button(SystemAction.sleep.title) { SystemAction.sleep.perform() }

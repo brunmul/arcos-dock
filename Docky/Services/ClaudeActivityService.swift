@@ -354,7 +354,7 @@ final class ClaudeActivityService: ObservableObject {
             try data.write(to: url, options: .atomic)
             connectionError = nil
         } catch ClaudeSettingsError.unexpectedShape {
-            connectionError = "~/.claude/settings.json has a shape Docky does not recognize, so it was left untouched."
+            connectionError = "~/.claude/settings.json has a shape Oriel does not recognize, so it was left untouched."
         } catch {
             connectionError = error.localizedDescription
         }

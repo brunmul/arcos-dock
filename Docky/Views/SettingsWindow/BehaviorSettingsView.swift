@@ -362,7 +362,7 @@ struct BehaviorSettingsView: View {
                 ToggleRow(
                     symbol: "power",
                     title: "Open at Login",
-                    note: "Docky starts by itself after you sign in.",
+                    note: "Oriel starts by itself after you sign in.",
                     isOn: $preferences.opensAtLogin
                 )
             }
@@ -373,13 +373,13 @@ struct BehaviorSettingsView: View {
     private var systemDockSection: some View {
         SettingsGroup(
             title: "System Dock",
-            note: "Docky saves your Dock settings first and puts them back when this is off or Docky quits."
+            note: "Oriel saves your Dock settings first and puts them back when this is off or Oriel quits."
         ) {
             SettingsCard {
                 ToggleRow(
                     symbol: "dock.rectangle",
                     title: "Hide System Dock",
-                    note: "The macOS Dock autohides with a long delay, without bouncing or launch animations, on Docky's edge.",
+                    note: "The macOS Dock autohides with a long delay, without bouncing or launch animations, on Oriel's edge.",
                     isOn: $preferences.hidesSystemDock
                 )
                 SettingsDivider()

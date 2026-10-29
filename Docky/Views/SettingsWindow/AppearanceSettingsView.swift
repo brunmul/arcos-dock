@@ -337,7 +337,7 @@ struct AppearanceSettingsView: View {
                     }
                 }
 
-                Text("Choose whether Docky tile chrome keeps the current rounded corners or uses a full circle or capsule clip.")
+                Text("Choose whether Oriel tile chrome keeps the current rounded corners or uses a full circle or capsule clip.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -743,7 +743,7 @@ struct AppearanceSettingsView: View {
                     }
                 }
 
-                Text("Override the chrome outline with a solid color. When off, Docky uses its default glass stroke (or no stroke when Glass is disabled).")
+                Text("Override the chrome outline with a solid color. When off, Oriel uses its default glass stroke (or no stroke when Glass is disabled).")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

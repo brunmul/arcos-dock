@@ -259,7 +259,7 @@ struct ThemesSettingsView: View {
         }
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        return "My Docky Theme \(formatter.string(from: Date())).dockytheme"
+        return "My Oriel Theme \(formatter.string(from: Date())).dockytheme"
     }
 
     private var deletionDialogBinding: Binding<Bool> {

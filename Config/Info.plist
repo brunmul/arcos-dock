@@ -7,15 +7,17 @@
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIconFile</key>
-	<string>Ducky</string>
+	<string>AppIcon</string>
 	<key>CFBundleIconName</key>
-	<string>Ducky</string>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
+	<string>Oriel</string>
+	<key>CFBundleDisplayName</key>
+	<string>Oriel</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
@@ -27,21 +29,23 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Docky needs automation access to control Finder, System Events, and supported apps for file, menu, and window actions.</string>
+	<string>Oriel needs automation access to control Finder, System Events, and supported apps for file, menu, and window actions.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Docky uses calendar access to show your next upcoming event in the calendar widget.</string>
+	<string>Oriel uses calendar access to show your next upcoming event in the calendar widget.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>Docky uses calendar access to show your next upcoming event in the calendar widget.</string>
+	<string>Oriel uses calendar access to show your next upcoming event in the calendar widget.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Docky uses your location to show local weather in the weather widget.</string>
+	<string>Oriel uses your location to show local weather in the weather widget.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Based on Docky (github.com/josejuanqm/docky), GPLv3.</string>
 	<key>NSMainNibFile</key>
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>Docky uses reminders access to show your open tasks in the reminders widget.</string>
+	<string>Oriel uses reminders access to show your open tasks in the reminders widget.</string>
 	<key>NSRemindersUsageDescription</key>
-	<string>Docky uses reminders access to show your open tasks in the reminders widget.</string>
+	<string>Oriel uses reminders access to show your open tasks in the reminders widget.</string>
 	<key>SUFeedURL</key>
 	<string>https://getdocky.com/releases/appcast.xml</string>
 	<key>SUPublicEDKey</key>

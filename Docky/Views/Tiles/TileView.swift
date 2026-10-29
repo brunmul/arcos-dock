@@ -1898,7 +1898,7 @@ struct TileView: View {
             return nil
         }
 
-        return .action(String(localized: "Hide in Docky")) {
+        return .action(String(localized: "Hide in Oriel")) {
             preferences.setAppHiddenInDocky(bundleIdentifier: app.bundleIdentifier, isHidden: true)
         }
     }

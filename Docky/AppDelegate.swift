@@ -264,9 +264,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
                 let alert = NSAlert()
                 alert.messageText = "Widget installed"
-                alert.informativeText = "Restart Docky to start using \(downloadURL.lastPathComponent)."
+                alert.informativeText = "Restart Oriel to start using \(downloadURL.lastPathComponent)."
                 alert.alertStyle = .informational
-                alert.addButton(withTitle: "Restart Docky")
+                alert.addButton(withTitle: "Restart Oriel")
                 alert.addButton(withTitle: "Later")
                 if alert.runModal() == .alertFirstButtonReturn {
                     NSApp.terminate(nil)
@@ -286,7 +286,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private func presentLinkInstallsDisabledAlert() {
         let alert = NSAlert()
         alert.messageText = "Installing widgets from links is off"
-        alert.informativeText = "For safety, Docky won't install a widget from a link until you turn this on in Settings › Widget Store."
+        alert.informativeText = "For safety, Oriel won't install a widget from a link until you turn this on in Settings › Widget Store."
         alert.alertStyle = .informational
         alert.addButton(withTitle: "Open Settings")
         alert.addButton(withTitle: "Cancel")
@@ -300,7 +300,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private func confirmLinkInstall(host: String) -> Bool {
         let alert = NSAlert()
         alert.messageText = "Install a widget from “\(host)”?"
-        alert.informativeText = "Widgets are native plugins that run inside Docky with the same access Docky has — Accessibility, Automation, files, and more. Docky can't verify what a widget does. Only continue if you trust this source."
+        alert.informativeText = "Widgets are native plugins that run inside Oriel with the same access Oriel has — Accessibility, Automation, files, and more. Oriel can't verify what a widget does. Only continue if you trust this source."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Cancel")
         alert.addButton(withTitle: "Download & Install")
@@ -604,9 +604,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
 
         let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "Docky"
+        statusItem.button?.title = "Oriel"
 
-        let debugMenu = NSMenu(title: "Docky")
+        let debugMenu = NSMenu(title: "Oriel")
         let snapshotItem = NSMenuItem(
             title: "Show Dock Preferences and Settings",
             action: #selector(showDebugSnapshot(_:)),
@@ -664,7 +664,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         showOnboardingItem.target = self
 
         let overrideSettingsItem = NSMenuItem(
-            title: "Override Docky Settings with plist…",
+            title: "Override Oriel Settings with plist…",
             action: #selector(overrideSettingsWithPlist(_:)),
             keyEquivalent: ""
         )
@@ -692,7 +692,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         checkForUpdatesItem.target = self
 
         let quitItem = NSMenuItem(
-            title: "Quit Docky",
+            title: "Quit Oriel",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
@@ -829,7 +829,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
             let confirm = NSAlert()
             confirm.messageText = "Override \(dockyKeys.count) docky.* keys?"
-            confirm.informativeText = "Existing docky.* UserDefaults will be cleared first, then replaced with the values from \(url.lastPathComponent). Docky will relaunch after."
+            confirm.informativeText = "Existing docky.* UserDefaults will be cleared first, then replaced with the values from \(url.lastPathComponent). Oriel will relaunch after."
             confirm.addButton(withTitle: "Override and Relaunch")
             confirm.addButton(withTitle: "Cancel")
             guard confirm.runModal() == .alertFirstButtonReturn else { return }
@@ -886,7 +886,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let dockSettings = DockSettingsService.shared
 
         return [
-            "Docky Preferences",
+            "Oriel Preferences",
             "---------------",
             "tileVerticalPadding: \(preferences.tileVerticalPadding)",
             "tileSpacing: \(preferences.tileSpacing)",

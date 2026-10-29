@@ -270,7 +270,7 @@ final class CalendarService: ObservableObject {
         let endDate = calendar.date(byAdding: .minute, value: 63, to: now) ?? now.addingTimeInterval(3_780)
 
         let next = CalendarEventSnapshot(
-            title: "Docky demo review",
+            title: "Oriel demo review",
             startDate: startDate,
             endDate: endDate,
             isAllDay: false,

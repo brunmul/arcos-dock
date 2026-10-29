@@ -3,11 +3,11 @@
   "packages": [
     {
       "id": "docky.core",
-      "title": "Docky Core Actions",
+      "title": "Oriel Core Actions",
       "author": "Docky",
       "version": "1.0.0",
       "reviewStatus": "curated",
-      "description": "Built-in Docky actions and reviewed scripted extensions.",
+      "description": "Built-in Oriel actions and reviewed scripted extensions.",
       "actions": [
         {
           "id": "app.open",

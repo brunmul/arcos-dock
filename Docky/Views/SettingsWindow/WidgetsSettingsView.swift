@@ -66,14 +66,14 @@ struct WidgetsSettingsView: View {
                         .foregroundStyle(.tint)
                         .font(.title3)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Restart Docky to apply changes")
+                        Text("Restart Oriel to apply changes")
                             .font(.callout.weight(.medium))
                         Text("Widget bundles are loaded once per launch. New installs and removals take effect after a restart.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 12)
-                    Button("Quit Docky") {
+                    Button("Quit Oriel") {
                         NSApp.terminate(nil)
                     }
                 }
@@ -82,7 +82,7 @@ struct WidgetsSettingsView: View {
 
         SettingsBlockSection("Security") {
             Toggle("Allow installing widgets from links", isOn: $prefs.allowsWidgetLinkInstalls)
-            Text("Links like `docky://install-widget` let a web page install a widget. Off by default. Widgets are native plugins that run inside Docky with the same access Docky has — Accessibility, Automation, files, and more — and Docky doesn't sandbox or verify them, so only install widgets you trust. Installing a `.dockywidget` file yourself always works.")
+            Text("Links like `docky://install-widget` let a web page install a widget. Off by default. Widgets are native plugins that run inside Oriel with the same access Oriel has — Accessibility, Automation, files, and more — and Oriel doesn't sandbox or verify them, so only install widgets you trust. Installing a `.dockywidget` file yourself always works.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

@@ -195,14 +195,14 @@ final class AppleScriptService {
             PermissionsService.shared.updateFinderAutomation(status: .denied)
             presentAlert(
                 title: "Finder automation wasn’t allowed",
-                body: "Allow Docky to control Finder in Privacy & Security > Automation, or use the Automation (Finder) row in Docky Settings to request access again."
+                body: "Allow Oriel to control Finder in Privacy & Security > Automation, or use the Automation (Finder) row in Oriel Settings to request access again."
             )
         case .accessibilityDenied:
             PermissionsService.shared.presentPermissionAlert(for: .accessibility, actionTitle: "Finder action")
         case .compilationFailed:
             presentAlert(
                 title: "Finder action failed",
-                body: "Docky couldn't prepare the AppleScript needed for this Finder action."
+                body: "Oriel couldn't prepare the AppleScript needed for this Finder action."
             )
         case .executionFailed(let message):
             presentAlert(
@@ -256,7 +256,7 @@ final class AppleScriptService {
         case .compilationFailed:
             presentAlert(
                 title: "Script action failed",
-                body: "Docky couldn't prepare the AppleScript needed for \(actionTitle.lowercased())."
+                body: "Oriel couldn't prepare the AppleScript needed for \(actionTitle.lowercased())."
             )
         case .executionFailed(let message):
             presentAlert(
@@ -311,13 +311,13 @@ final class AppleScriptService {
         let appName = displayName(for: targetApp)
         if includesSystemEvents {
             alert.informativeText = String(
-                format: String(localized: "Allow Docky to control System Events and %1$@ in Privacy & Security > Automation, then try %2$@ again."),
+                format: String(localized: "Allow Oriel to control System Events and %1$@ in Privacy & Security > Automation, then try %2$@ again."),
                 appName,
                 actionTitle.lowercased()
             )
         } else {
             alert.informativeText = String(
-                format: String(localized: "Allow Docky to control %1$@ in Privacy & Security > Automation, then try %2$@ again."),
+                format: String(localized: "Allow Oriel to control %1$@ in Privacy & Security > Automation, then try %2$@ again."),
                 appName,
                 actionTitle.lowercased()
             )
@@ -336,14 +336,14 @@ final class AppleScriptService {
             PermissionsService.shared.updateSystemEventsAutomation(status: .denied)
             presentAlert(
                 title: "System Events automation wasn’t allowed",
-                body: "Allow Docky to control System Events in Privacy & Security > Automation, or use the Automation (System Events) row in Docky Settings to request access again."
+                body: "Allow Oriel to control System Events in Privacy & Security > Automation, or use the Automation (System Events) row in Oriel Settings to request access again."
             )
         case .accessibilityDenied:
             PermissionsService.shared.presentPermissionAlert(for: .accessibility, actionTitle: "Request System Events Access")
         case .compilationFailed:
             presentAlert(
                 title: "System Events action failed",
-                body: "Docky couldn't prepare the AppleScript needed to request System Events automation."
+                body: "Oriel couldn't prepare the AppleScript needed to request System Events automation."
             )
         case .executionFailed(let message):
             presentAlert(

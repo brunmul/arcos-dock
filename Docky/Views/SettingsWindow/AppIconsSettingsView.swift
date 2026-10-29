@@ -52,7 +52,7 @@ struct AppIconsSettingsView: View {
             }
 
             SettingsBlockSection("Start Menu") {
-                Text("Pick a custom image for the Start Menu tile. Defaults to Docky's own app icon.")
+                Text("Pick a custom image for the Start Menu tile. Defaults to Oriel's own app icon.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -61,7 +61,7 @@ struct AppIconsSettingsView: View {
             }
 
             SettingsBlockSection("Overrides") {
-                Text("Choose a custom image for any app Docky currently knows about. Custom app icons follow Docky's circle tile clipping when circle tiles are enabled.")
+                Text("Choose a custom image for any app Oriel currently knows about. Custom app icons follow Oriel's circle tile clipping when circle tiles are enabled.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 

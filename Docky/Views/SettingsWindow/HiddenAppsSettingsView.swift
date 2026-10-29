@@ -12,7 +12,7 @@ struct HiddenAppsSettingsView: View {
     var body: some View {
         SettingsPage {
             SettingsBlockSection("Restore") {
-                Text("Apps hidden with \"Hide in Docky\" stay out of Docky's pinned and running app surfaces until you restore them here.")
+                Text("Apps hidden with \"Hide in Oriel\" stay out of Oriel's pinned and running app surfaces until you restore them here.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -81,7 +81,7 @@ private struct HiddenAppRow: View {
 
             Spacer()
 
-            Button("Show in Docky") {
+            Button("Show in Oriel") {
                 preferences.setAppHiddenInDocky(bundleIdentifier: app.bundleIdentifier, isHidden: false)
             }
         }
