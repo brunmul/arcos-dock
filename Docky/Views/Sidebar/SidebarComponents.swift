@@ -591,15 +591,59 @@ enum SidebarPinnedItem: Identifiable {
     }
 }
 
-/// What tells a pinned site from a pinned app: a small outlined globe, in
-/// the tertiary gray. Apps have no mark.
+/// What tells a pinned site from a pinned app: a small solid globe, drawn
+/// by hand like Windows (DockyWin Marks.cs), at 9 pt in the theme's ink at
+/// 60 %. Apps have no mark.
 struct SidebarSiteMark: View {
     var body: some View {
-        Image(systemName: "globe")
-            .font(.system(size: 8, weight: .regular))
-            .foregroundStyle(.tertiary)
+        SidebarGlobeMarkShape()
+            .fill(Color.primary.opacity(0.6))
+            .frame(width: 9, height: 9)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
+    }
+}
+
+/// A solid globe on a 16×16 grid: a disc cut by a meridian ring and an
+/// equator band.
+struct SidebarGlobeMarkShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let disc = Path(ellipseIn: CGRect(x: 0.5, y: 0.5, width: 15, height: 15))
+        var ring = Path(ellipseIn: CGRect(x: 8 - 3.7, y: 8 - 8.2, width: 7.4, height: 16.4))
+        ring = ring.subtracting(Path(ellipseIn: CGRect(x: 8 - 2.3, y: 8 - 6.8, width: 4.6, height: 13.6)))
+        let band = Path(CGRect(x: 0, y: 7.3, width: 16, height: 1.4))
+        let globe = disc.subtracting(ring).subtracting(band)
+        return globe.applying(CGAffineTransform(scaleX: rect.width / 16, y: rect.height / 16)
+            .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY)))
+    }
+}
+
+/// A solid screen on its stand, on a 16×16 grid, like Windows (DockyWin
+/// Marks.cs). Ready for an "on another screen" mark; none is drawn on the
+/// Mac yet.
+struct SidebarDisplayMarkShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 2.5, y: 2))
+        p.addLine(to: CGPoint(x: 13.5, y: 2))
+        p.addArc(tangent1End: CGPoint(x: 15, y: 2), tangent2End: CGPoint(x: 15, y: 3.5), radius: 1.5)
+        p.addLine(to: CGPoint(x: 15, y: 10.5))
+        p.addArc(tangent1End: CGPoint(x: 15, y: 12), tangent2End: CGPoint(x: 13.5, y: 12), radius: 1.5)
+        p.addLine(to: CGPoint(x: 9.5, y: 12))
+        p.addLine(to: CGPoint(x: 9.5, y: 13.5))
+        p.addLine(to: CGPoint(x: 11, y: 13.5))
+        p.addArc(center: CGPoint(x: 11, y: 14), radius: 0.5, startAngle: .degrees(-90), endAngle: .degrees(90), clockwise: false)
+        p.addLine(to: CGPoint(x: 5, y: 14.5))
+        p.addArc(center: CGPoint(x: 5, y: 14), radius: 0.5, startAngle: .degrees(90), endAngle: .degrees(270), clockwise: false)
+        p.addLine(to: CGPoint(x: 6.5, y: 13.5))
+        p.addLine(to: CGPoint(x: 6.5, y: 12))
+        p.addLine(to: CGPoint(x: 2.5, y: 12))
+        p.addArc(tangent1End: CGPoint(x: 1, y: 12), tangent2End: CGPoint(x: 1, y: 10.5), radius: 1.5)
+        p.addLine(to: CGPoint(x: 1, y: 3.5))
+        p.addArc(tangent1End: CGPoint(x: 1, y: 2), tangent2End: CGPoint(x: 2.5, y: 2), radius: 1.5)
+        p.closeSubpath()
+        return p.applying(CGAffineTransform(scaleX: rect.width / 16, y: rect.height / 16)
+            .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY)))
     }
 }
 
