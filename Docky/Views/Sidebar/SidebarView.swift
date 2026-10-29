@@ -502,8 +502,8 @@ private struct SidebarConcaveCorner: Shape {
 
 // MARK: - Header
 
-/// Docky's own icon on the left, which opens Settings, and the buttons
-/// on the right.
+/// The Oriel logo on the left, which opens Settings, and the buttons on
+/// the right.
 private struct SidebarHeader: View {
     @ObservedObject private var sidebar = SidebarPreferences.shared
 
@@ -520,30 +520,74 @@ private struct SidebarHeader: View {
     }
 }
 
-/// Docky's app icon, where the Apple mark used to be: a click opens
-/// Settings on the sidebar's panes.
+/// The Oriel logo, where the Apple mark used to be: the arch and the word
+/// in the full sidebar, the arch alone on the rail, in the theme's ink.
+/// A click opens Settings on the sidebar's panes.
 struct SidebarAppMark: View {
+    var showsWordmark = true
+
     @State private var isHovered = false
 
     var body: some View {
         Button {
             SettingsNavigator.shared.requestPane(id: "sidebarLayout")
         } label: {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .interpolation(.high)
-                .frame(width: 20, height: 20)
-                .frame(width: 28, height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.primary.opacity(isHovered ? 0.08 : 0))
-                )
-                .contentShape(Rectangle())
+            HStack(alignment: .bottom, spacing: 5) {
+                OrielSymbolShape()
+                    .fill(Color.primary, style: FillStyle(eoFill: true))
+                    .frame(width: 15 * OrielSymbolShape.aspectRatio, height: 15)
+                if showsWordmark {
+                    // Fraunces isn't on the Mac; New York is the soft
+                    // serif closest to it. Its cap height comes close to
+                    // the arch, sitting on the same line.
+                    Text(verbatim: "Oriel")
+                        .font(.system(size: 18, weight: .medium, design: .serif))
+                        .foregroundStyle(Color.primary)
+                        .fixedSize()
+                        .alignmentGuide(.bottom) { $0[.lastTextBaseline] }
+                }
+            }
+            .padding(.horizontal, showsWordmark ? 6 : 0)
+            .frame(minWidth: 28, minHeight: 24)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.primary.opacity(isHovered ? 0.08 : 0))
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .help("Settings")
         .accessibilityLabel("Settings")
+    }
+}
+
+/// Oriel's arch: a rounded arch with a half sun cut out at its foot,
+/// drawn on a grid of 100 (filled even-odd) and fitted by its bounds,
+/// 76 wide and 78 high.
+struct OrielSymbolShape: Shape {
+    static let aspectRatio: CGFloat = 76 / 78
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 12, y: 50))
+        path.addRelativeArc(center: CGPoint(x: 50, y: 50), radius: 38, startAngle: .degrees(180), delta: .degrees(180))
+        path.addLine(to: CGPoint(x: 88, y: 72))
+        path.addRelativeArc(center: CGPoint(x: 70, y: 72), radius: 18, startAngle: .degrees(0), delta: .degrees(90))
+        path.addLine(to: CGPoint(x: 30, y: 90))
+        path.addRelativeArc(center: CGPoint(x: 30, y: 72), radius: 18, startAngle: .degrees(90), delta: .degrees(90))
+        path.closeSubpath()
+        path.move(to: CGPoint(x: 32, y: 76))
+        path.addRelativeArc(center: CGPoint(x: 50, y: 76), radius: 18, startAngle: .degrees(180), delta: .degrees(180))
+        path.closeSubpath()
+
+        let scale = min(rect.width / 76, rect.height / 78)
+        let width = 76 * scale
+        let height = 78 * scale
+        let transform = CGAffineTransform(translationX: rect.midX - width / 2, y: rect.midY - height / 2)
+            .scaledBy(x: scale, y: scale)
+            .translatedBy(x: -12, y: -12)
+        return path.applying(transform)
     }
 }
 
@@ -608,10 +652,12 @@ private struct SidebarRail: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            SidebarAppMark(showsWordmark: false)
+                .padding(.top, 8)
+
             SidebarIconButton(systemName: "sidebar.left", help: "Show the full sidebar") {
                 sidebar.isCompact = false
             }
-            .padding(.top, 8)
 
             // The options stay within reach in every form of the bar.
             SidebarOptionsMenu()
