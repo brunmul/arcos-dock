@@ -228,7 +228,9 @@ struct SidebarActiveBar: View {
             .frame(maxWidth: .infinity)
             .frame(height: 3)
             .padding(.horizontal, 10)
-            .padding(.bottom, 2)
+            // Flush with the tile's foot, over its bottom line (1 pt, or
+            // 1.25 for a super pin, drawn inside the tile), so nothing is cut
+            // (Bruno, 29 October; as Windows' docky-windows b0bda38).
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
