@@ -203,3 +203,26 @@ struct SidebarSuperPinDecoration: View {
         .allowsHitTesting(false)
     }
 }
+
+/// The mark of the pinned item in front, on trial (Bruno, 29 October; as
+/// Windows' docky-windows c3279cb): a rounded bar 14 × 3 pt, centered
+/// 3 pt above the foot of its tile, in its icon's color (the super pin's,
+/// `SidebarSuperPinColor`) at 85 %. Over the white pill, which stays.
+struct SidebarActiveBar: View {
+    let itemID: String
+
+    @ObservedObject private var sidebar = SidebarPreferences.shared
+    @ObservedObject private var favicons = SidebarFaviconStore.shared
+    @ObservedObject private var chromeFavicons = ChromeFaviconStore.shared
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let color = SidebarSuperPinColor.color(forItem: itemID, theme: sidebar.theme, isDark: colorScheme == .dark)
+        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+            .fill(Color(nsColor: color).opacity(0.85))
+            .frame(width: 14, height: 3)
+            .padding(.bottom, 3)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}

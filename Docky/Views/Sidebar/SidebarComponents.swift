@@ -797,7 +797,7 @@ struct SidebarPlaceView: View {
         case .grid:
             LazyVGrid(columns: SidebarMetrics.tileColumns, spacing: SidebarMetrics.tileSpacing) {
                 ForEach(openItems) { item in
-                    draggable(SidebarPinnedItemTile(item: item, dimsClosedSuperPin: true), item: item)
+                    draggable(SidebarPinnedItemTile(item: item, dimsClosedSuperPin: true, showsActiveBar: true), item: item)
                 }
                 if !closed.isEmpty {
                     SidebarPinnedOverflow(items: closed, isRow: false, allItemIDs: allItemIDs)
@@ -971,6 +971,9 @@ struct SidebarPinnedItemTile: View {
     let item: SidebarPinnedItem
     /// In a place of the full sidebar, a closed super pin shows faded.
     var dimsClosedSuperPin = false
+    /// In a place of the full sidebar, the one in front has a small bar of
+    /// its icon's color at its foot (`SidebarActiveBar`).
+    var showsActiveBar = false
 
     @ObservedObject private var hotKeys = SidebarHotKeyService.shared
 
@@ -993,8 +996,8 @@ struct SidebarPinnedItemTile: View {
     @ViewBuilder
     private var tile: some View {
         switch item {
-        case .app(let app): SidebarAppTile(app: app, dimsClosedSuperPin: dimsClosedSuperPin)
-        case .site(let site): SidebarSiteTile(site: site, dimsClosedSuperPin: dimsClosedSuperPin)
+        case .app(let app): SidebarAppTile(app: app, dimsClosedSuperPin: dimsClosedSuperPin, showsActiveBar: showsActiveBar)
+        case .site(let site): SidebarSiteTile(site: site, dimsClosedSuperPin: dimsClosedSuperPin, showsActiveBar: showsActiveBar)
         }
     }
 }
@@ -1006,6 +1009,9 @@ struct SidebarPinnedItemTile: View {
 struct SidebarSiteTile: View {
     let site: SidebarPinnedSite
     var dimsClosedSuperPin = false
+    /// In a place of the full sidebar, the one in front has a small bar of
+    /// its icon's color at its foot (`SidebarActiveBar`).
+    var showsActiveBar = false
 
     @ObservedObject private var workspace = WorkspaceService.shared
     @ObservedObject private var browserTabs = BrowserTabsService.shared
@@ -1059,6 +1065,11 @@ struct SidebarSiteTile: View {
                     superPinLineWidth: isSuperPin ? 1.25 : nil,
                     superPinItemID: SidebarPinnedItem.site(site).id
                 ))
+                .overlay(alignment: .bottom) {
+                    if showsActiveBar, isCurrent {
+                        SidebarActiveBar(itemID: SidebarPinnedItem.site(site).id)
+                    }
+                }
                 // A site, not an app: a small globe in the top left corner,
                 // clear of the unread dot, the number and an account photo.
                 .overlay(alignment: .topLeading) {
@@ -1101,6 +1112,9 @@ struct SidebarSiteTile: View {
 struct SidebarAppTile: View {
     let app: AppTile
     var dimsClosedSuperPin = false
+    /// In a place of the full sidebar, the one in front has a small bar of
+    /// its icon's color at its foot (`SidebarActiveBar`).
+    var showsActiveBar = false
 
     @ObservedObject private var workspace = WorkspaceService.shared
     @ObservedObject private var badges = DockBadgeService.shared
@@ -1143,6 +1157,11 @@ struct SidebarAppTile: View {
                     superPinLineWidth: isSuperPin ? 1.25 : nil,
                     superPinItemID: SidebarPinnedItem.app(app).id
                 ))
+                .overlay(alignment: .bottom) {
+                    if showsActiveBar, isFrontmost {
+                        SidebarActiveBar(itemID: SidebarPinnedItem.app(app).id)
+                    }
+                }
                 .overlay(alignment: .topTrailing) {
                     if hasBadge {
                         Circle()
