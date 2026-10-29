@@ -441,8 +441,10 @@ struct SidebarItemBackground: View {
     /// text color, so the tiles stand out (Bruno, 27 October).
     var outlined: Bool = false
     /// A super pin: a line of this width in the theme's accent
-    /// (`NotionIconPack.superPinAccent`) in place of the fine one, over the
-    /// active state as well (Bruno, 28 October). Nil for any other item.
+    /// (`NotionIconPack.superPinAccent`) at 85 %, in place of the fine one,
+    /// over a soft inner glow of the accent (`SidebarSuperPinGlow`), over
+    /// the active state as well (Bruno, 28 and 29 October; as Windows'
+    /// docky-windows fed4595). Nil for any other item.
     var superPinLineWidth: CGFloat? = nil
 
     @Environment(\.colorScheme) private var colorScheme
@@ -477,11 +479,54 @@ struct SidebarItemBackground: View {
         .overlay {
             if let superPinLineWidth {
                 let accent = NotionIconPack.superPinAccent(theme: SidebarPreferences.shared.theme, isDark: isDark)
-                shape.strokeBorder(Color(nsColor: accent), lineWidth: superPinLineWidth)
+                SidebarSuperPinGlow(accent: accent, isDark: isDark)
+                    .clipShape(RoundedRectangle(cornerRadius: max(0, cornerRadius - 1), style: .continuous))
+                shape.strokeBorder(Color(nsColor: accent).opacity(0.85), lineWidth: superPinLineWidth)
             } else if outlined && !isCurrent {
                 shape.strokeBorder(Color.primary.opacity(isDark ? 0.10 : 0.08), lineWidth: 1)
             }
         }
+    }
+}
+
+/// A super pin's inner glow: a radial gradient of the accent fitted to the
+/// tile (an ellipse touching the middle of each edge), clear up to 45 %,
+/// alpha 0x30 / 0x40 (light / dark bar) at 85 %, 0x55 / 0x70 at the edge,
+/// and that last color on into the corners, the densest part. Under the
+/// content, never faded with it, and never hit.
+struct SidebarSuperPinGlow: View {
+    let accent: NSColor
+    let isDark: Bool
+
+    var body: some View {
+        let color = Color(nsColor: accent)
+        let middle = (isDark ? 0x40 : 0x30) / 255.0
+        let edge = (isDark ? 0x70 : 0x55) / 255.0
+        Canvas { context, size in
+            let radiusX = size.width / 2
+            let radiusY = size.height / 2
+            guard radiusX > 0, radiusY > 0 else { return }
+            // A circle of radius X, squashed to the ellipse about the center.
+            context.translateBy(x: radiusX, y: radiusY)
+            context.scaleBy(x: 1, y: radiusY / radiusX)
+            let reach = max(size.width, size.height) * 2
+            context.fill(
+                Path(CGRect(x: -reach, y: -reach, width: reach * 2, height: reach * 2)),
+                with: .radialGradient(
+                    Gradient(stops: [
+                        .init(color: color.opacity(0), location: 0),
+                        .init(color: color.opacity(0), location: 0.45),
+                        .init(color: color.opacity(middle), location: 0.85),
+                        .init(color: color.opacity(edge), location: 1)
+                    ]),
+                    center: .zero,
+                    startRadius: 0,
+                    endRadius: radiusX
+                )
+            )
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
@@ -622,7 +667,7 @@ struct SidebarPinnedItemRow: View {
         .background(SidebarItemBackground(
             isHovered: isHovered,
             isCurrent: isCurrent,
-            superPinLineWidth: isSuperPin ? 2.5 : nil
+            superPinLineWidth: isSuperPin ? 1.25 : nil
         ))
         .contentShape(Rectangle())
         .onTapGesture { open() }
@@ -876,8 +921,6 @@ struct SidebarPinnedItemTile: View {
     let item: SidebarPinnedItem
     /// In a place of the full sidebar, a closed super pin shows faded.
     var dimsClosedSuperPin = false
-    /// In the compact rail, a super pin's line is 2 pt instead of 2.5.
-    var isRail = false
 
     @ObservedObject private var hotKeys = SidebarHotKeyService.shared
 
@@ -900,8 +943,8 @@ struct SidebarPinnedItemTile: View {
     @ViewBuilder
     private var tile: some View {
         switch item {
-        case .app(let app): SidebarAppTile(app: app, dimsClosedSuperPin: dimsClosedSuperPin, isRail: isRail)
-        case .site(let site): SidebarSiteTile(site: site, dimsClosedSuperPin: dimsClosedSuperPin, isRail: isRail)
+        case .app(let app): SidebarAppTile(app: app, dimsClosedSuperPin: dimsClosedSuperPin)
+        case .site(let site): SidebarSiteTile(site: site, dimsClosedSuperPin: dimsClosedSuperPin)
         }
     }
 }
@@ -913,7 +956,6 @@ struct SidebarPinnedItemTile: View {
 struct SidebarSiteTile: View {
     let site: SidebarPinnedSite
     var dimsClosedSuperPin = false
-    var isRail = false
 
     @ObservedObject private var workspace = WorkspaceService.shared
     @ObservedObject private var browserTabs = BrowserTabsService.shared
@@ -964,7 +1006,7 @@ struct SidebarSiteTile: View {
                     cornerRadius: SidebarMetrics.tileCornerRadius,
                     notionIcon: sidebar.wornIcon(forItem: SidebarPinnedItem.site(site).id),
                     outlined: true,
-                    superPinLineWidth: isSuperPin ? (isRail ? 2 : 2.5) : nil
+                    superPinLineWidth: isSuperPin ? 1.25 : nil
                 ))
                 // A site, not an app: a small globe in the top left corner,
                 // clear of the unread dot, the number and an account photo.
@@ -1008,7 +1050,6 @@ struct SidebarSiteTile: View {
 struct SidebarAppTile: View {
     let app: AppTile
     var dimsClosedSuperPin = false
-    var isRail = false
 
     @ObservedObject private var workspace = WorkspaceService.shared
     @ObservedObject private var badges = DockBadgeService.shared
@@ -1048,7 +1089,7 @@ struct SidebarAppTile: View {
                     cornerRadius: SidebarMetrics.tileCornerRadius,
                     notionIcon: sidebar.wornIcon(forItem: SidebarPinnedItem.app(app).id),
                     outlined: true,
-                    superPinLineWidth: isSuperPin ? (isRail ? 2 : 2.5) : nil
+                    superPinLineWidth: isSuperPin ? 1.25 : nil
                 ))
                 .overlay(alignment: .topTrailing) {
                     if hasBadge {

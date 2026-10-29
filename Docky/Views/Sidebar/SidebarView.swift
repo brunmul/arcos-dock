@@ -622,7 +622,7 @@ private struct SidebarRail: View {
             if sidebar.shows(.pinned), !pinnedItems.isEmpty {
                 VStack(spacing: 4) {
                     ForEach(pinnedItems) { item in
-                        SidebarPinnedItemTile(item: item, isRail: true)
+                        SidebarPinnedItemTile(item: item)
                     }
                 }
                 .frame(width: Self.itemWidth)
