@@ -446,6 +446,9 @@ struct SidebarItemBackground: View {
     /// the active state as well (Bruno, 28 and 29 October; as Windows'
     /// docky-windows fed4595). Nil for any other item.
     var superPinLineWidth: CGFloat? = nil
+    /// The super pin's `SidebarPinnedItem.id`: its line and glow take the
+    /// item's own color (`SidebarSuperPinColor`, Bruno, 29 October).
+    var superPinItemID: String? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -477,11 +480,13 @@ struct SidebarItemBackground: View {
             }
         }
         .overlay {
-            if let superPinLineWidth {
-                let accent = NotionIconPack.superPinAccent(theme: SidebarPreferences.shared.theme, isDark: isDark)
-                SidebarSuperPinGlow(accent: accent, isDark: isDark)
-                    .clipShape(RoundedRectangle(cornerRadius: max(0, cornerRadius - 1), style: .continuous))
-                shape.strokeBorder(Color(nsColor: accent).opacity(0.85), lineWidth: superPinLineWidth)
+            if let superPinLineWidth, let superPinItemID {
+                SidebarSuperPinDecoration(
+                    itemID: superPinItemID,
+                    lineWidth: superPinLineWidth,
+                    cornerRadius: cornerRadius,
+                    isDark: isDark
+                )
             } else if outlined && !isCurrent {
                 shape.strokeBorder(Color.primary.opacity(isDark ? 0.10 : 0.08), lineWidth: 1)
             }
@@ -711,7 +716,8 @@ struct SidebarPinnedItemRow: View {
         .background(SidebarItemBackground(
             isHovered: isHovered,
             isCurrent: isCurrent,
-            superPinLineWidth: isSuperPin ? 1.25 : nil
+            superPinLineWidth: isSuperPin ? 1.25 : nil,
+            superPinItemID: item.id
         ))
         .contentShape(Rectangle())
         .onTapGesture { open() }
@@ -1050,7 +1056,8 @@ struct SidebarSiteTile: View {
                     cornerRadius: SidebarMetrics.tileCornerRadius,
                     notionIcon: sidebar.wornIcon(forItem: SidebarPinnedItem.site(site).id),
                     outlined: true,
-                    superPinLineWidth: isSuperPin ? 1.25 : nil
+                    superPinLineWidth: isSuperPin ? 1.25 : nil,
+                    superPinItemID: SidebarPinnedItem.site(site).id
                 ))
                 // A site, not an app: a small globe in the top left corner,
                 // clear of the unread dot, the number and an account photo.
@@ -1133,7 +1140,8 @@ struct SidebarAppTile: View {
                     cornerRadius: SidebarMetrics.tileCornerRadius,
                     notionIcon: sidebar.wornIcon(forItem: SidebarPinnedItem.app(app).id),
                     outlined: true,
-                    superPinLineWidth: isSuperPin ? 1.25 : nil
+                    superPinLineWidth: isSuperPin ? 1.25 : nil,
+                    superPinItemID: SidebarPinnedItem.app(app).id
                 ))
                 .overlay(alignment: .topTrailing) {
                     if hasBadge {
