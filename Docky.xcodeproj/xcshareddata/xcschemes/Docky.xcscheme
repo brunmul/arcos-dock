@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "11051DE62F929079005CE09D"
-               BuildableName = "Docky.app"
+               BuildableName = "Oriel.app"
                BlueprintName = "Docky"
                ReferencedContainer = "container:Docky.xcodeproj">
             </BuildableReference>
@@ -45,7 +45,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "11051DE62F929079005CE09D"
-            BuildableName = "Docky.app"
+            BuildableName = "Oriel.app"
             BlueprintName = "Docky"
             ReferencedContainer = "container:Docky.xcodeproj">
          </BuildableReference>
@@ -62,7 +62,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "11051DE62F929079005CE09D"
-            BuildableName = "Docky.app"
+            BuildableName = "Oriel.app"
             BlueprintName = "Docky"
             ReferencedContainer = "container:Docky.xcodeproj">
          </BuildableReference>

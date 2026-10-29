@@ -20,7 +20,7 @@ import OSLog
 @MainActor
 final class RecentFilesService: ObservableObject {
     static let shared = RecentFilesService()
-    private static let logger = Logger(subsystem: "gt.quintero.Docky", category: "RecentFiles")
+    private static let logger = Logger(subsystem: "com.brunomuller.Oriel", category: "RecentFiles")
 
     @Published private(set) var recentURLs: [URL] = []
 

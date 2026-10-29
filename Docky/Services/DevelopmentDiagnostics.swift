@@ -35,8 +35,11 @@ enum DevelopmentDiagnostics {
             "written: \(Date().formatted(date: .numeric, time: .standard)) (\(reason))",
             "pid: \(ProcessInfo.processInfo.processIdentifier)",
             "bundle: \(Bundle.main.bundlePath)",
+            "bundle identifier: \(Bundle.main.bundleIdentifier ?? "none")",
             "designated requirement: \(designatedRequirement())",
-            "accessibility trusted: \(AXIsProcessTrusted() ? "yes" : "no")"
+            "accessibility trusted: \(AXIsProcessTrusted() ? "yes" : "no")",
+            // Permissions don't follow an identifier change.
+            "note: since 2026-10-29 the app is com.brunomuller.Oriel (Oriel.app), no longer gt.quintero.Docky (Docky.app). Accessibility, Calendar, Reminders, Automation, Location and Screen Recording must be granted again to Oriel; the old entries for Docky can be removed in System Settings."
         ]
         let text = lines.joined(separator: "\n") + "\n"
         try? text.write(to: stateFileURL, atomically: true, encoding: .utf8)

@@ -543,7 +543,7 @@ final class SidebarBookmarks {
 
     private(set) var bookmarks: [SidebarBookmark] = []
     private var readDates: [String: Date] = [:]
-    private let queue = DispatchQueue(label: "gt.quintero.Docky.chrome-bookmarks", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "com.brunomuller.Oriel.chrome-bookmarks", qos: .userInitiated)
 
     /// Read once ahead, so the first New Tab already has them.
     private init() {

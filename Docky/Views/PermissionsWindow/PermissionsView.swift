@@ -230,7 +230,7 @@ struct PermissionsView: View {
                     .frame(width: 48, height: 48)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Docky.app")
+                    Text("Oriel.app")
                         .font(.headline)
                     Text("Drag this into the macOS privacy list")
                         .font(.subheadline)

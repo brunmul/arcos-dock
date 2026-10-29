@@ -27,12 +27,12 @@
 //
 //  Setting the simulated version from a shell:
 //
-//      defaults write gt.quintero.Docky DebugPreferredOSVersion 13.5
+//      defaults write com.brunomuller.Oriel DebugPreferredOSVersion 13.5
 //      # then relaunch Docky to re-evaluate
 //
 //  Clearing it:
 //
-//      defaults delete gt.quintero.Docky DebugPreferredOSVersion
+//      defaults delete com.brunomuller.Oriel DebugPreferredOSVersion
 //
 
 import Foundation

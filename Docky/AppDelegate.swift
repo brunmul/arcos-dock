@@ -24,6 +24,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var debugSnapshotTextView: NSTextView?
     private var debugSnapshotCancellables = Set<AnyCancellable>()
 
+    override init() {
+        // Before the main menu nib or any service reads preferences.
+        LegacyDefaultsMigration.runIfNeeded()
+        super.init()
+    }
+
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         // Bound every AX call to 1s so a hung app can't stall the main run loop.
         // Must precede any other AX work — applies process-wide.

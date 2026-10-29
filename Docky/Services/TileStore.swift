@@ -17,7 +17,7 @@ import os.log
 final class TileStore: ObservableObject {
     static let shared = TileStore()
 
-    private static let logger = Logger(subsystem: "gt.quintero.Docky", category: "TileStore")
+    private static let logger = Logger(subsystem: "com.brunomuller.Oriel", category: "TileStore")
 
     @Published private(set) var tiles: [Tile] = []
 

@@ -20,7 +20,7 @@ final class SystemDockVisibilityService {
     private static let snapshotKey = "docky.systemDockVisibilitySnapshot"
     private static let snapshotNullMarker = "__docky_null__"
     private static let stateFilename = "SystemDockVisibilityState.plist"
-    private static let fallbackBundleIdentifier = "gt.quintero.Docky"
+    private static let fallbackBundleIdentifier = "com.brunomuller.Oriel"
     private static let watchdogAppName = "DockyDockWatchdog.app"
 
     private static let managedKeys: [String] = [

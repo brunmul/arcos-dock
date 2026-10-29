@@ -25,7 +25,7 @@ import os.log
 final class ExternalWidgetLoader {
     static let shared = ExternalWidgetLoader()
 
-    private let log = Logger(subsystem: "gt.quintero.Docky", category: "ExternalWidgetLoader")
+    private let log = Logger(subsystem: "com.brunomuller.Oriel", category: "ExternalWidgetLoader")
     private(set) var hasDiscovered = false
 
     /// Reason the loader couldn't bring a bundle into the registry. Used

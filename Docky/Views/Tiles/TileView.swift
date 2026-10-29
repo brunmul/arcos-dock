@@ -13,7 +13,7 @@ import QuickLookThumbnailing
 import SwiftUI
 
 struct TileView: View {
-    private static let logger = Logger(subsystem: "gt.quintero.Docky", category: "TileTap")
+    private static let logger = Logger(subsystem: "com.brunomuller.Oriel", category: "TileTap")
 
     let tile: Tile
     let isDragging: Bool
@@ -3116,7 +3116,7 @@ func fileContextActions(for url: URL) -> [ContextAction] {
 @MainActor
 func recentFilesContextActions() -> [ContextAction] {
     let urls = RecentFilesService.shared.recentURLs
-    Logger(subsystem: "gt.quintero.Docky", category: "RecentFiles")
+    Logger(subsystem: "com.brunomuller.Oriel", category: "RecentFiles")
         .info("menu requested urls.count=\(urls.count, privacy: .public)")
     guard !urls.isEmpty else { return [] }
 

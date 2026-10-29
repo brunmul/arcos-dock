@@ -22,7 +22,7 @@ import Foundation
 final class AppleScriptService {
     static let shared = AppleScriptService()
 
-    private let scriptQueue = DispatchQueue(label: "gt.quintero.Docky.applescript", qos: .userInitiated)
+    private let scriptQueue = DispatchQueue(label: "com.brunomuller.Oriel.applescript", qos: .userInitiated)
 
     private init() {}
 

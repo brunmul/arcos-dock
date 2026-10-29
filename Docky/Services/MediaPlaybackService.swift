@@ -587,7 +587,7 @@ private final class MediaRemoteBridge {
 }
 
 private final class MediaRemoteHelperProcess {
-    private static let logger = Logger(subsystem: "gt.quintero.Docky", category: "MediaRemoteHelper")
+    private static let logger = Logger(subsystem: "com.brunomuller.Oriel", category: "MediaRemoteHelper")
 
     var onSnapshot: ((MediaRemoteSnapshot?) -> Void)?
 

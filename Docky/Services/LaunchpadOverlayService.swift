@@ -132,7 +132,7 @@ final class LaunchpadOverlayService: ObservableObject {
             .appendingPathComponent("Applications", isDirectory: true)
     ]
     private let scanQueue = DispatchQueue(
-        label: "gt.quintero.Docky.LaunchpadScan",
+        label: "com.brunomuller.Oriel.LaunchpadScan",
         qos: .utility
     )
     private var watchers: [DispatchSourceFileSystemObject] = []

@@ -35,7 +35,7 @@ final class ChromeFaviconStore: ObservableObject {
 
     private var entries: [String: Entry] = [:]
     private var pending: Set<String> = []
-    private let queue = DispatchQueue(label: "gt.quintero.Docky.chrome-favicons", qos: .utility)
+    private let queue = DispatchQueue(label: "com.brunomuller.Oriel.chrome-favicons", qos: .utility)
     /// Read on `queue` only.
     private var snapshotURLs: [URL] = []
     private var snapshotDate: Date = .distantPast
