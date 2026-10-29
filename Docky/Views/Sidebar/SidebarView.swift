@@ -43,7 +43,6 @@ struct SidebarView: View {
     @ObservedObject private var browserTabs = BrowserTabsService.shared
     @Bindable private var preferences = DockyPreferences.shared
 
-    @AppStorage("docky.fork.sidebar.foldsPinned") private var foldsPinned = false
     @AppStorage("docky.fork.sidebar.foldsApps") private var foldsApps = false
     @AppStorage("docky.fork.sidebar.foldsWeb") private var foldsWeb = false
 
@@ -94,9 +93,7 @@ struct SidebarView: View {
 
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 1) {
-                    if !foldsPinned {
-                        pinnedFolderTiles
-                    }
+                    pinnedFolderTiles
 
                     SidebarDivider()
                         .padding(.vertical, 6)
@@ -123,18 +120,12 @@ struct SidebarView: View {
     /// Everything pinned to the dock, as two small blocks of tiles: the
     /// apps, fixed at the top, then the folders and the Trash, which
     /// scroll with the lists (`pinnedFolderTiles`). The folder whose tile
-    /// is selected lists its contents underneath. Both fold under the
-    /// header like Apps and Web.
+    /// is selected lists its contents underneath. No header and no folding:
+    /// they always show (Bruno, 29 October). The old fold setting
+    /// ("docky.fork.sidebar.foldsPinned") is no longer read.
     @ViewBuilder
     private var pinnedSection: some View {
-        SidebarGroupHeader(
-            title: "Pinned",
-            count: topItems.count + topWidgets.count,
-            isFolded: foldsPinned,
-            toggle: { withAnimation(SidebarMetrics.foldAnimation) { foldsPinned.toggle() } }
-        )
-        .padding(.bottom, foldsPinned ? 0 : 3)
-        if !foldsPinned, !topItems.isEmpty || !topWidgets.isEmpty {
+        if !topItems.isEmpty || !topWidgets.isEmpty {
             SidebarPlaceView(items: topItems, widgets: topWidgets, layout: sidebar.topLayout, allItemIDs: pinnedItems.map(\.id))
         }
     }
